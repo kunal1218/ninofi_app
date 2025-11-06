@@ -1,12 +1,13 @@
 import {
-    loginFailure,
-    loginStart,
-    loginSuccess,
-    logout as logoutAction,
-    registerFailure,
-    registerStart,
-    registerSuccess,
+  loginFailure,
+  loginStart,
+  loginSuccess,
+  logout as logoutAction,
+  registerFailure,
+  registerStart,
+  registerSuccess,
 } from '../store/authSlice';
+import { clearProjects } from '../store/projectSlice';
 import { authAPI } from './api';
 
 export const login = (email, password) => async (dispatch) => {
@@ -38,10 +39,12 @@ export const register = (userData) => async (dispatch) => {
 export const logout = () => async (dispatch) => {
   try {
     await authAPI.logout();
+    dispatch(clearProjects());
     dispatch(logoutAction());
     return { success: true };
   } catch (error) {
     console.error('Logout error:', error);
+    dispatch(clearProjects());
     dispatch(logoutAction()); // Logout locally even if API call fails
     return { success: true };
   }

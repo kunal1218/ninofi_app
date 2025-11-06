@@ -1,43 +1,24 @@
 import React from 'react';
 import {
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../../services/auth';
 
 const HomeownerDashboard = ({ navigation }) => {
   const { user } = useSelector((state) => state.auth);
+  const { projects } = useSelector((state) => state.projects);
   const dispatch = useDispatch();
 
-  // Mock data for now
   const stats = {
-    activeProjects: 3,
-    inEscrow: 12500,
+    activeProjects: projects?.length || 0,
+    inEscrow: projects?.reduce((sum, project) => sum + (project.budget || 0), 0),
   };
-
-  const projects = [
-    {
-      id: '1',
-      title: 'Kitchen Renovation',
-      contractor: 'BuildCorp Contractors',
-      status: 'In Progress',
-      progress: 65,
-      budget: 8500,
-    },
-    {
-      id: '2',
-      title: 'Bathroom Remodel',
-      contractor: 'ProTile Solutions',
-      status: 'Pending Approval',
-      progress: 90,
-      budget: 4000,
-    },
-  ];
 
   const handleLogout = async () => {
     await dispatch(logout());
@@ -117,7 +98,7 @@ const HomeownerDashboard = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          {projects.map((project) => (
+          {projects?.map((project) => (
             <TouchableOpacity 
               key={project.id}
               style={styles.projectCard}

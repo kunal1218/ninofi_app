@@ -1,18 +1,21 @@
 import React, { useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { useDispatch } from 'react-redux';
+import { addProject } from '../../store/projectSlice';
 
 const CreateProjectScreen = ({ navigation }) => {
+  const dispatch = useDispatch();
   const [step, setStep] = useState(1);
   const [projectType, setProjectType] = useState('');
   const [formData, setFormData] = useState({
@@ -72,18 +75,37 @@ const CreateProjectScreen = ({ navigation }) => {
   };
 
   const handleSubmit = () => {
+    const budgetValue = parseFloat(formData.budget);
     const totalMilestones = milestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0);
-    if (totalMilestones > parseFloat(formData.budget)) {
+
+    if (Number.isNaN(budgetValue)) {
+      Alert.alert('Invalid Budget', 'Please enter a valid budget amount');
+      return;
+    }
+
+    if (totalMilestones > budgetValue) {
       Alert.alert('Budget Exceeded', 'Total milestones exceed project budget');
       return;
     }
 
     const projectData = {
-      ...formData,
+      id: Date.now().toString(),
+      title: formData.title.trim(),
+      contractor: 'Pending Contractor Match',
+      status: 'Draft',
+      progress: 0,
+      budget: budgetValue,
+      timeline: formData.timeline,
+      address: formData.address,
       projectType,
-      milestones,
-      status: 'draft',
+      milestones: milestones.map((milestone, index) => ({
+        ...milestone,
+        id: `${Date.now()}-${index}`,
+        amount: parseFloat(milestone.amount) || 0,
+      })),
     };
+
+    dispatch(addProject(projectData));
 
     Alert.alert('Success', 'Project created! Now fund it to get started.', [
       { text: 'OK', onPress: () => navigation.navigate('Dashboard') }

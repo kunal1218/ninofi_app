@@ -300,14 +300,6 @@ This is a course project for CS407 Mobile App Development at UW-Madison.
 ## 🙏 Acknowledgments
 
 - **User Feedback:** Antonio R. (Contractor) and Mukesh P. (Homeowner)
-- **Course:** CS407 Mobile App Development, UW-Madison
-- **Instructor:** [Instructor Name]
-
----
-
-## 📸 Screenshots
-
-*(Add screenshots of key screens here)*
 
 ---
 

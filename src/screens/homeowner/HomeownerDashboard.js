@@ -7,21 +7,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useDispatch, useSelector } from 'react-redux';
-import { logout } from '../../services/auth';
+import { useSelector } from 'react-redux';
+import palette from '../../styles/palette';
 
 const HomeownerDashboard = ({ navigation }) => {
   const { user } = useSelector((state) => state.auth);
   const { projects } = useSelector((state) => state.projects);
-  const dispatch = useDispatch();
 
   const stats = {
     activeProjects: projects?.length || 0,
     inEscrow: projects?.reduce((sum, project) => sum + (project.budget || 0), 0),
-  };
-
-  const handleLogout = async () => {
-    await dispatch(logout());
   };
 
   return (
@@ -34,22 +29,10 @@ const HomeownerDashboard = ({ navigation }) => {
             <Text style={styles.role}>Homeowner</Text>
           </View>
           <View style={styles.headerButtons}>
-  <TouchableOpacity style={styles.notificationButton}>
-    <Text style={styles.notificationIcon}>🔔</Text>
-  </TouchableOpacity>
-  <TouchableOpacity 
-    style={styles.notificationButton}
-    onPress={() => navigation.navigate('Profile')}
-  >
-    <Text style={styles.notificationIcon}>⚙️</Text>
-  </TouchableOpacity>
-  <TouchableOpacity 
-    style={styles.notificationButton}
-    onPress={handleLogout}
-  >
-    <Text style={styles.notificationIcon}>🚪</Text>
-  </TouchableOpacity>
-</View>
+            <TouchableOpacity style={styles.notificationButton}>
+              <Text style={styles.notificationIcon}>🔔</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Stats Cards */}
@@ -141,14 +124,16 @@ const HomeownerDashboard = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: palette.background,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: palette.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
   },
   headerButtons: {
     flexDirection: 'row',
@@ -158,16 +143,17 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 5,
+    color: palette.text,
   },
   role: {
     fontSize: 16,
-    color: '#666',
+    color: palette.muted,
   },
   notificationButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#F1EAFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -181,10 +167,12 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: palette.surface,
     padding: 20,
-    borderRadius: 12,
+    borderRadius: 16,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: palette.border,
   },
   statIcon: {
     fontSize: 32,
@@ -194,10 +182,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 5,
+    color: palette.text,
   },
   statLabel: {
     fontSize: 14,
-    color: '#666',
+    color: palette.muted,
   },
   section: {
     padding: 20,
@@ -213,10 +202,11 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     marginBottom: 15,
+    color: palette.text,
   },
   viewAll: {
     fontSize: 14,
-    color: '#1976D2',
+    color: palette.primary,
     fontWeight: '500',
   },
   quickActions: {
@@ -225,9 +215,9 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    backgroundColor: '#1976D2',
+    backgroundColor: palette.primary,
     padding: 20,
-    borderRadius: 12,
+    borderRadius: 16,
     alignItems: 'center',
   },
   actionIcon: {
@@ -241,27 +231,29 @@ const styles = StyleSheet.create({
   },
   actionButtonOutline: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: palette.surface,
     padding: 20,
-    borderRadius: 12,
+    borderRadius: 16,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#1976D2',
+    borderColor: palette.primary,
   },
   actionIconOutline: {
     fontSize: 24,
     marginBottom: 8,
   },
   actionTextOutline: {
-    color: '#1976D2',
+    color: palette.primary,
     fontSize: 16,
     fontWeight: '600',
   },
   projectCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: palette.surface,
     padding: 20,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 15,
+    borderWidth: 1,
+    borderColor: palette.border,
   },
   projectHeader: {
     flexDirection: 'row',
@@ -273,18 +265,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     flex: 1,
+    color: palette.text,
   },
   projectStatus: {
     fontSize: 12,
-    color: '#4CAF50',
-    backgroundColor: '#E8F5E9',
+    color: palette.primary,
+    backgroundColor: '#EEE4FF',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
   },
   projectContractor: {
     fontSize: 14,
-    color: '#666',
+    color: palette.muted,
     marginBottom: 15,
   },
   progressContainer: {
@@ -294,7 +287,7 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     fontSize: 14,
-    color: '#666',
+    color: palette.muted,
   },
   progressValue: {
     fontSize: 14,
@@ -302,13 +295,13 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 8,
-    backgroundColor: '#E0E0E0',
+    backgroundColor: '#E6DAFF',
     borderRadius: 4,
     marginBottom: 15,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#1976D2',
+    backgroundColor: palette.primary,
     borderRadius: 4,
   },
   projectFooter: {
@@ -319,10 +312,11 @@ const styles = StyleSheet.create({
   budget: {
     fontSize: 14,
     fontWeight: '600',
+    color: palette.text,
   },
   viewDetails: {
     fontSize: 14,
-    color: '#1976D2',
+    color: palette.primary,
     fontWeight: '500',
   },
 });

@@ -58,22 +58,16 @@ const ContractorDashboard = ({ navigation }) => {
             <Text style={styles.role}>Licensed Contractor</Text>
           </View>
           <View style={styles.headerButtons}>
-  <TouchableOpacity style={styles.notificationButton}>
-    <Text style={styles.notificationIcon}>🔔</Text>
-  </TouchableOpacity>
-  <TouchableOpacity 
-    style={styles.notificationButton}
-    onPress={() => navigation.navigate('Profile')}
-  >
-    <Text style={styles.notificationIcon}>⚙️</Text>
-  </TouchableOpacity>
-  <TouchableOpacity 
-    style={styles.notificationButton}
-    onPress={handleLogout}
-  >
-    <Text style={styles.notificationIcon}>🚪</Text>
-  </TouchableOpacity>
-</View>
+            <TouchableOpacity style={styles.notificationButton}>
+              <Text style={styles.notificationIcon}>🔔</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.notificationButton}
+              onPress={handleLogout}
+            >
+              <Text style={styles.notificationIcon}>🚪</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Stats Cards */}

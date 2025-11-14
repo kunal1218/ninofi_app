@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
+    Keyboard,
     Platform,
     ScrollView,
     StyleSheet,
@@ -37,6 +38,23 @@ const RegisterScreen = ({ route, navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [isInputFocused, setInputFocused] = useState(false);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const scrollRef = useRef(null);
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isKeyboardVisible && !isInputFocused && scrollRef.current) {
+      scrollRef.current.scrollTo({ y: 0, animated: true });
+    }
+  }, [isKeyboardVisible, isInputFocused]);
 
   const handleRegister = async () => {
     // Validation
@@ -75,28 +93,38 @@ const RegisterScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleInputFocus = () => setInputFocused(true);
+  const handleInputBlur = () => setInputFocused(false);
+
   const updateField = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const keyboardPadding = isExtraSmallScreen ? 200 : isSmallScreen ? 160 : 140;
+  const defaultBottomPadding = 0;
+  const dynamicPaddingBottom = (isKeyboardVisible || isInputFocused) ? keyboardPadding : defaultBottomPadding;
   const scrollContentStyle = [
     styles.scrollContent,
+    { paddingBottom: dynamicPaddingBottom },
     isSmallScreen && styles.scrollContentSmall,
     isExtraSmallScreen && styles.scrollContentExtraSmall
   ];
+  const scrollEnabled = isInputFocused || isKeyboardVisible;
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.container}>
+    <SafeAreaView edges={['top']} style={styles.container}>
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <View style={styles.screenContent}>
           <ScrollView 
+            ref={scrollRef}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={scrollContentStyle}
             bounces={false}
-            scrollEnabled={false}
+            scrollEnabled={scrollEnabled}
+            keyboardShouldPersistTaps="handled"
             style={styles.scrollView}
           >
             <View style={[
@@ -172,6 +200,8 @@ const RegisterScreen = ({ route, navigation }) => {
                 onChangeText={(value) => updateField('fullName', value)}
                 autoCapitalize="words"
                 editable={!isLoading}
+                onFocus={handleInputFocus}
+                onBlur={handleInputBlur}
               />
             </View>
 
@@ -198,6 +228,8 @@ const RegisterScreen = ({ route, navigation }) => {
                 autoCapitalize="none"
                 autoComplete="email"
                 editable={!isLoading}
+                onFocus={handleInputFocus}
+                onBlur={handleInputBlur}
               />
             </View>
 
@@ -222,6 +254,8 @@ const RegisterScreen = ({ route, navigation }) => {
                 onChangeText={(value) => updateField('phone', value)}
                 keyboardType="phone-pad"
                 editable={!isLoading}
+                onFocus={handleInputFocus}
+                onBlur={handleInputBlur}
               />
             </View>
 
@@ -252,6 +286,8 @@ const RegisterScreen = ({ route, navigation }) => {
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   editable={!isLoading}
+                  onFocus={handleInputFocus}
+                  onBlur={handleInputBlur}
                 />
                 <TouchableOpacity 
                   onPress={() => setShowPassword(!showPassword)}
@@ -302,6 +338,8 @@ const RegisterScreen = ({ route, navigation }) => {
                   secureTextEntry={!showConfirmPassword}
                   autoCapitalize="none"
                   editable={!isLoading}
+                  onFocus={handleInputFocus}
+                  onBlur={handleInputBlur}
                 />
                 <TouchableOpacity 
                   onPress={() => setShowConfirmPassword(!showConfirmPassword)}
@@ -395,14 +433,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 20,
   },
-  scrollContentSmall: {
-    paddingBottom: 12,
-  },
-  scrollContentExtraSmall: {
-    paddingBottom: 8,
-  },
+  scrollContentSmall: {},
+  scrollContentExtraSmall: {},
   header: {
     padding: 20,
     paddingTop: 10,
@@ -478,15 +511,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   form: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 0,
   },
   formSmall: {
     paddingHorizontal: 16,
     paddingTop: 8,
+    paddingBottom: 0,
   },
   formExtraSmall: {
     paddingHorizontal: 12,
     paddingTop: 4,
+    paddingBottom: 0,
   },
   inputContainer: {
     marginBottom: 20,
@@ -652,15 +689,15 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 0,
   },
   registerButtonSmall: {
     paddingVertical: 14,
-    marginBottom: 16,
+    marginBottom: 0,
   },
   registerButtonExtraSmall: {
     paddingVertical: 12,
-    marginBottom: 14,
+    marginBottom: 0,
   },
   registerButtonDisabled: {
     backgroundColor: '#CCCCCC',

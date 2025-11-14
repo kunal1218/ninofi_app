@@ -34,10 +34,6 @@ const WelcomeScreen = ({ navigation }) => {
           <Text style={styles.nextIcon}>→</Text>
         </TouchableOpacity>
       </View>
-
-      <TouchableOpacity style={styles.skipButton} onPress={() => console.log('Skip')}>
-        <Text style={styles.skipText}>Skip</Text>
-      </TouchableOpacity>
     </SafeAreaView>
   );
 };
@@ -77,8 +73,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 30,
     paddingTop: 50,
-    paddingBottom: 70,
-    justifyContent: 'space-between',
+    paddingBottom: 40,
+    justifyContent: 'flex-start',
+    gap: 60,
   },
   textBlock: {
     marginTop: 40,
@@ -99,6 +96,7 @@ const styles = StyleSheet.create({
     height: 68,
     borderRadius: 34,
     backgroundColor: '#7E4DFF',
+    marginTop: 30,
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'flex-start',
@@ -115,15 +113,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 28,
     fontWeight: '600',
-  },
-  skipButton: {
-    position: 'absolute',
-    bottom: 30,
-    left: 30,
-  },
-  skipText: {
-    fontSize: 14,
-    color: '#1C1C1C',
   },
 });
 

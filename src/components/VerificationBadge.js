@@ -1,3 +1,7 @@
+/**
+ * VerificationBadge - tiny status pill used throughout onboarding/verification flows.
+ * Accepts semantic status keys and renders appropriate icon/text colors.
+ */
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import palette from '../styles/palette';
@@ -25,6 +29,9 @@ const STATUS_CONFIG = {
   },
 };
 
+/**
+ * Convert hex color to rgba string so we can render translucent backgrounds.
+ */
 const hexToRgba = (hex, alpha = 1) => {
   const normalized = hex.replace('#', '');
   const bigint = parseInt(normalized, 16);
@@ -34,7 +41,12 @@ const hexToRgba = (hex, alpha = 1) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+/**
+ * @param {{ status?: keyof typeof STATUS_CONFIG }} props
+ * status - semantic key describing verification state.
+ */
 const VerificationBadge = ({ status = 'unverified' }) => {
+  // Fallback to unverified to avoid runtime errors when unknown strings arrive
   const badgeStatus = STATUS_CONFIG[status] || STATUS_CONFIG.unverified;
 
   return (

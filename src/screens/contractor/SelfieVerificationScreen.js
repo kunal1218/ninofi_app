@@ -1,3 +1,7 @@
+/**
+ * SelfieVerificationScreen - Capture/submit contractor selfie for ID verification.
+ * Shares similar UX with document upload but uses the front camera + 1:1 crop hints.
+ */
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import {
@@ -12,9 +16,13 @@ import {
 } from 'react-native';
 import palette from '../../styles/palette';
 
+/**
+ * @param {{ navigation: any }} props React Navigation stack props.
+ */
 const SelfieVerificationScreen = ({ navigation }) => {
   const [imageUri, setImageUri] = useState(null);
 
+  // Permissions mirror DocumentUpload but we bias messaging toward selfies
   const requestCameraPermission = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -39,6 +47,7 @@ const SelfieVerificationScreen = ({ navigation }) => {
     return true;
   };
 
+  // Launch front camera with square aspect to center the face for ID match
   const takeSelfie = async () => {
     const permitted = await requestCameraPermission();
     if (!permitted) return;
@@ -56,6 +65,7 @@ const SelfieVerificationScreen = ({ navigation }) => {
     }
   };
 
+  // Gallery selector allows using a previously-captured selfie if quality is good
   const chooseFromGallery = async () => {
     const permitted = await requestMediaPermission();
     if (!permitted) return;
@@ -74,6 +84,7 @@ const SelfieVerificationScreen = ({ navigation }) => {
 
   const handleRetake = () => setImageUri(null);
 
+  // Placeholder success flow; backend integration would upload and await review
   const handleConfirm = () => {
     if (!imageUri) {
       Alert.alert('Selfie Required', 'Capture or select a selfie first.');
@@ -94,6 +105,7 @@ const SelfieVerificationScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* ScrollView used to keep layout responsive with safe-area padding */}
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}

@@ -1,3 +1,8 @@
+/**
+ * VerificationScreen - Contractor verification hub.
+ * Shows progress, required documents, and provides entry points to upload flows/selfie capture.
+ * The screen is currently fed by local mock state until backend integration lands.
+ */
 import React, { useMemo, useState } from 'react';
 import {
   SafeAreaView,
@@ -13,7 +18,11 @@ import palette from '../../styles/palette';
 
 const TOTAL_REQUIREMENTS = 4;
 
+/**
+ * @param {{ navigation: any }} props React Navigation stack props.
+ */
 const VerificationScreen = ({ navigation }) => {
+  // Mock document data; once API exists this will be fetched + stored via Redux query
   const [documents] = useState({
     governmentId: {
       uploaded: true,
@@ -32,11 +41,13 @@ const VerificationScreen = ({ navigation }) => {
     },
   });
 
+  // Track selfie progress separately so we can drive a different badge + CTA
   const [selfieStatus] = useState({
     taken: false,
     status: 'pending',
   });
 
+  // Count how many requirements are satisfied (documents + selfie) to drive copy + bar
   const uploadedCount = useMemo(() => {
     let count = 0;
     Object.values(documents).forEach((doc) => {
@@ -48,6 +59,7 @@ const VerificationScreen = ({ navigation }) => {
 
   const progress = uploadedCount / TOTAL_REQUIREMENTS;
 
+  // Collapse the multiple doc statuses into a single overall badge state
   const overallStatus = useMemo(() => {
     const docStatuses = [
       documents.governmentId.status,
@@ -75,6 +87,7 @@ const VerificationScreen = ({ navigation }) => {
     return 'pending';
   }, [documents, selfieStatus, uploadedCount]);
 
+  // Friendly status copy shown under the cards
   const statusMessage = useMemo(() => {
     switch (overallStatus) {
       case 'verified':
@@ -88,6 +101,7 @@ const VerificationScreen = ({ navigation }) => {
     }
   }, [overallStatus]);
 
+  // Source of truth for the required-document list
   const documentList = [
     {
       key: 'governmentId',
@@ -103,14 +117,22 @@ const VerificationScreen = ({ navigation }) => {
     },
   ];
 
+  /**
+   * Navigate to document upload screen with a prefilled type.
+   * Uses stack navigation to push the camera/gallery capture screen.
+   */
   const handleUploadPress = (documentType) => {
     navigation.navigate('DocumentUpload', { documentType });
   };
 
+  /**
+   * Kick off selfie capture flow; selfie screen uses expo-image-picker front camera.
+   */
   const handleSelfiePress = () => {
     navigation.navigate('SelfieVerification');
   };
 
+  // Rendered whenever the contractor hasn't uploaded a doc yet
   const renderUploadCard = (label, documentKey) => (
     <TouchableOpacity
       key={documentKey}
@@ -133,6 +155,7 @@ const VerificationScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* ScrollView keeps long forms usable on smaller devices while preserving padding */}
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View style={styles.headerCopy}>

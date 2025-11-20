@@ -1,3 +1,7 @@
+/**
+ * DocumentCard - preview tile for uploaded verification documents.
+ * Shows thumbnail (if available), a badge, and opens upload flow when pressed.
+ */
 import {
     Image,
     StyleSheet,
@@ -8,18 +12,28 @@ import {
 import palette from '../styles/palette';
 import VerificationBadge from './VerificationBadge';
 
+// Map backend status strings to badge variants to keep UI copy centralized
 const STATUS_MAP = {
   uploaded: 'pending',
   approved: 'verified',
   rejected: 'rejected',
 };
 
+/**
+ * @param {{
+ *  documentType: string;
+ *  imageUri?: string;
+ *  status?: 'uploaded' | 'approved' | 'rejected';
+ *  onPress?: () => void;
+ * }} props
+ */
 const DocumentCard = ({
   documentType,
   imageUri,
   status = 'uploaded',
   onPress,
 }) => {
+  // Badge defaults to "Upload" when no status provided
   const badgeStatus = STATUS_MAP[status] || 'unverified';
 
   return (

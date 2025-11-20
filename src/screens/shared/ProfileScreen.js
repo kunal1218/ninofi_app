@@ -1,19 +1,21 @@
+import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
 import {
-    Alert,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../../services/auth';
 
-const ProfileScreen = ({ navigation }) => {
+const ProfileScreen = ({ navigation: propNavigation }) => {
+  const navigation = propNavigation || useNavigation();
   const { user, role } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const hasNavigation = Boolean(navigation);
@@ -50,7 +52,10 @@ const ProfileScreen = ({ navigation }) => {
         { 
           text: 'Logout', 
           style: 'destructive',
-          onPress: async () => await dispatch(logout())
+          onPress: async () => {
+            await dispatch(logout());
+            Alert.alert('Success', 'You have been logged out');
+          }
         }
       ]
     );

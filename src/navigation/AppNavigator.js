@@ -25,105 +25,107 @@ import ReviewMilestoneScreen from '../screens/homeowner/ReviewMilestoneScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import WalletScreen from '../screens/shared/WalletScreen';
 
-const Stack = createStackNavigator();
+const RootStack = createStackNavigator();
+const MainStack = createStackNavigator();
 
 const AppNavigator = () => {
   const { isAuthenticated, role } = useSelector((state) => state.auth);
 
-  // Determine which dashboard to show based on role
   const getDashboardScreen = () => {
-  switch (role) {
-    case 'homeowner':
-      return HomeownerDashboard;
-    case 'contractor':
-      return ContractorDashboard;
-    case 'worker':
-      return WorkerDashboard;
-    default:
-      return HomeownerDashboard;
-  }
-};
+    switch (role) {
+      case 'homeowner':
+        return HomeownerDashboard;
+      case 'contractor':
+        return ContractorDashboard;
+      case 'worker':
+        return WorkerDashboard;
+      default:
+        return HomeownerDashboard;
+    }
+  };
 
   const DashboardComponent = getDashboardScreen();
 
+  const MainAppStack = () => (
+    <MainStack.Navigator screenOptions={{ headerShown: false }}>
+      <MainStack.Screen
+        name="Dashboard"
+        component={DashboardComponent}
+        options={{ title: 'Home' }}
+      />
+      <MainStack.Screen
+        name="CreateProject"
+        component={CreateProjectScreen}
+        options={{ title: 'Create Project' }}
+      />
+      <MainStack.Screen
+        name="ProjectDetails"
+        component={ProjectDetailsScreen}
+        options={{ title: 'Project Details' }}
+      />
+      <MainStack.Screen
+        name="FundProject"
+        component={FundProjectScreen}
+        options={{ title: 'Fund Project' }}
+      />
+      <MainStack.Screen
+        name="ReviewMilestone"
+        component={ReviewMilestoneScreen}
+        options={{ title: 'Review Milestone' }}
+      />
+      <MainStack.Screen
+        name="SubmitMilestone"
+        component={SubmitMilestoneScreen}
+        options={{ title: 'Submit Milestone' }}
+      />
+      <MainStack.Screen
+        name="Verification"
+        component={VerificationScreen}
+        options={{ title: 'Account Verification' }}
+      />
+      <MainStack.Screen
+        name="DocumentUpload"
+        component={DocumentUploadScreen}
+        options={{ title: 'Upload Document' }}
+      />
+      <MainStack.Screen
+        name="SelfieVerification"
+        component={SelfieVerificationScreen}
+        options={{ title: 'Selfie Verification' }}
+      />
+      <MainStack.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ title: 'Profile' }}
+      />
+      <MainStack.Screen
+        name="Wallet"
+        component={WalletScreen}
+        options={{ title: 'Wallet' }}
+      />
+    </MainStack.Navigator>
+  );
+
   return (
-    <Stack.Navigator 
+    <RootStack.Navigator
       key={isAuthenticated ? 'app-stack' : 'auth-stack'}
-      initialRouteName={isAuthenticated ? "Dashboard" : "Welcome"}
+      initialRouteName={isAuthenticated ? 'MainApp' : 'Welcome'}
       screenOptions={{
         headerShown: false,
         gestureEnabled: true,
       }}
     >
       {!isAuthenticated ? (
-        // Auth Stack
         <>
-          <Stack.Screen name="Welcome" component={WelcomeScreen} />
-          <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Register" component={RegisterScreen} />
+          <RootStack.Screen name="Welcome" component={WelcomeScreen} />
+          <RootStack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+          <RootStack.Screen name="Login" component={LoginScreen} />
+          <RootStack.Screen name="Register" component={RegisterScreen} />
         </>
       ) : (
-        // Main App Stack (AFTER LOGIN)
-        <>
-          <Stack.Screen 
-            name="Dashboard" 
-            component={DashboardComponent}
-            options={{ title: 'Home' }}
-          />
-          <Stack.Screen 
-            name="CreateProject" 
-            component={CreateProjectScreen}
-            options={{ title: 'Create Project' }}
-          />
-          <Stack.Screen 
-            name="ProjectDetails" 
-            component={ProjectDetailsScreen}
-            options={{ title: 'Project Details' }}
-          />
-          <Stack.Screen 
-            name="FundProject" 
-            component={FundProjectScreen}
-            options={{ title: 'Fund Project' }}
-          />
-          <Stack.Screen 
-            name="ReviewMilestone" 
-            component={ReviewMilestoneScreen}
-            options={{ title: 'Review Milestone' }}
-        />
-<Stack.Screen 
-  name="SubmitMilestone" 
-  component={SubmitMilestoneScreen}
-  options={{ title: 'Submit Milestone' }}
-/>
-<Stack.Screen 
-  name="Verification" 
-  component={VerificationScreen}
-  options={{ title: 'Account Verification' }}
-/>
-<Stack.Screen 
-  name="DocumentUpload" 
-  component={DocumentUploadScreen}
-  options={{ title: 'Upload Document' }}
-/>
-<Stack.Screen 
-  name="SelfieVerification" 
-  component={SelfieVerificationScreen}
-  options={{ title: 'Selfie Verification' }}
-/>
-<Stack.Screen 
-  name="Profile" 
-  component={ProfileScreen}
-  options={{ title: 'Profile' }}
-/>
-<Stack.Screen 
-  name="Wallet" 
-  component={WalletScreen}
-  options={{ title: 'Wallet' }}
-/>
-        </>
+        <RootStack.Screen name="MainApp" component={MainAppStack} />
       )}
-    </Stack.Navigator>
+    </RootStack.Navigator>
   );
 };
 

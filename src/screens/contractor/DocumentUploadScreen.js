@@ -1,3 +1,7 @@
+/**
+ * DocumentUploadScreen - Handles contractor document capture/selection.
+ * Uses expo-image-picker to either open the camera or the media library, guiding the user with tips.
+ */
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import {
@@ -12,10 +16,14 @@ import {
 } from 'react-native';
 import palette from '../../styles/palette';
 
+/**
+ * @param {{ route: any, navigation: any }} props Navigation props injected by React Navigation.
+ */
 const DocumentUploadScreen = ({ route, navigation }) => {
   const { documentType = 'Document' } = route.params || {};
   const [imageUri, setImageUri] = useState(null);
 
+  // Ask for camera access; expo-image-picker handles permission prompts per platform
   const requestCameraPermission = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -28,6 +36,7 @@ const DocumentUploadScreen = ({ route, navigation }) => {
     return true;
   };
 
+  // Ask for photo library access so the user can pull existing scans
   const requestMediaPermission = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -40,6 +49,7 @@ const DocumentUploadScreen = ({ route, navigation }) => {
     return true;
   };
 
+  // Launch camera with light editing to help straighten documents
   const takePhoto = async () => {
     const permitted = await requestCameraPermission();
     if (!permitted) return;
@@ -55,6 +65,7 @@ const DocumentUploadScreen = ({ route, navigation }) => {
     }
   };
 
+  // Let the contractor pick from camera roll; consistent quality settings with capture flow
   const chooseFromGallery = async () => {
     const permitted = await requestMediaPermission();
     if (!permitted) return;
@@ -70,8 +81,10 @@ const DocumentUploadScreen = ({ route, navigation }) => {
     }
   };
 
+  // Reset selection so the user can re-shoot or re-select
   const handleRetake = () => setImageUri(null);
 
+  // Simple optimistic confirmation; real implementation would upload to backend
   const handleConfirm = () => {
     if (!imageUri) {
       Alert.alert('Upload Required', 'Please capture or select your document first.');
@@ -93,6 +106,7 @@ const DocumentUploadScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* ScrollView prevents keyboard overlap and keeps layout consistent on smaller devices */}
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}

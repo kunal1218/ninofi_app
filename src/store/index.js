@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureStore } from '@reduxjs/toolkit';
 import { persistReducer, persistStore } from 'redux-persist';
 import authReducer from './authSlice';
+import invoiceReducer from './invoiceSlice';
 import projectReducer from './projectSlice';
 
 // Persist config for auth (so user stays logged in)
@@ -16,6 +17,7 @@ const persistedAuthReducer = persistReducer(authPersistConfig, authReducer);
 export const store = configureStore({
   reducer: {
     auth: persistedAuthReducer,
+    invoices: invoiceReducer,
     projects: projectReducer,
   },
   middleware: (getDefaultMiddleware) =>

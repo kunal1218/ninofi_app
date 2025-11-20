@@ -102,4 +102,29 @@ export const projectAPI = {
   },
 };
 
+// Invoice API calls (mocked for now)
+export const invoiceAPI = {
+  listInvoices: async () => {
+    // return api.get('/invoices');
+    return Promise.resolve({ data: [] });
+  },
+  saveInvoice: async (invoice) => {
+    // return api.post('/invoices', invoice);
+    return Promise.resolve({ data: invoice });
+  },
+  updateInvoice: async (invoice) => {
+    // return api.put(`/invoices/${invoice.id}`, invoice);
+    return Promise.resolve({ data: invoice });
+  },
+  uploadFile: async (fileUri) => {
+    // return api.post('/uploads', { fileUri });
+    return Promise.resolve({
+      data: {
+        fileUri,
+        thumbnailUri: fileUri,
+      },
+    });
+  },
+};
+
 export default api;

@@ -30,6 +30,13 @@ export default function TabLayout() {
       {isAuthenticated && (
         <>
           <Tabs.Screen
+            name="invoices"
+            options={{
+              title: 'Invoices',
+              tabBarIcon: ({ color }) => <IconSymbol size={28} name="doc.text.fill" color={color} />,
+            }}
+          />
+          <Tabs.Screen
             name="explore"
             options={{
               title: 'Explore',

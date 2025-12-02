@@ -12,6 +12,7 @@ import {
   fetchContractorProjectsStart,
   fetchContractorProjectsSuccess,
   fetchContractorProjectsFailure,
+  withdrawApplicationLocal,
 } from '../store/projectSlice';
 import { projectAPI } from './api';
 
@@ -106,5 +107,7 @@ export const loadContractorProjects = (contractorId) => async (dispatch) => {
 
 export const loadContractorApplications = (contractorId) => projectAPI.getApplicationsForContractor(contractorId);
 
-export const withdrawApplication = (applicationId, contractorId) =>
-  projectAPI.deleteApplication(applicationId, contractorId);
+export const withdrawApplication = (applicationId, contractorId) => async (dispatch) => {
+  await projectAPI.deleteApplication(applicationId, contractorId);
+  dispatch(withdrawApplicationLocal(applicationId));
+};

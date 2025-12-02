@@ -70,6 +70,10 @@ const projectSlice = createSlice({
         state.openProjects = state.openProjects.filter((p) => p.id !== id);
       }
     },
+    withdrawApplicationLocal: (state, action) => {
+      const id = action.payload;
+      state.appliedProjectIds = state.appliedProjectIds.filter((x) => x !== id);
+    },
     fetchContractorProjectsStart: (state) => {
       state.isLoadingContractor = true;
       state.contractorError = null;
@@ -98,6 +102,7 @@ export const {
   fetchOpenProjectsSuccess,
   fetchOpenProjectsFailure,
   applyForProject,
+  withdrawApplicationLocal,
   fetchContractorProjectsStart,
   fetchContractorProjectsSuccess,
   fetchContractorProjectsFailure,

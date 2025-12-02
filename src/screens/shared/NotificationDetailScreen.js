@@ -17,7 +17,14 @@ const NotificationDetailScreen = ({ route, navigation }) => {
     );
   }
 
-  const data = notification.data || {};
+  let data = notification.data || {};
+  if (typeof data === 'string') {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      data = {};
+    }
+  }
   const handleDecision = async (action) => {
     const hasAppId = Boolean(data.applicationId);
     const hasProjectAndContractor = data.projectId && data.contractorId;

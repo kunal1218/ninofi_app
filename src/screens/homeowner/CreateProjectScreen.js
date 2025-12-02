@@ -10,8 +10,10 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
+import * as ImagePicker from 'expo-image-picker';
 import { saveProject, removeProject } from '../../services/projects';
 
 const CreateProjectScreen = ({ navigation, route }) => {
@@ -44,8 +46,10 @@ const CreateProjectScreen = ({ navigation, route }) => {
       ? existingProject.media.map((m) => ({
           url: m.url || '',
           label: m.label || '',
+          localUri: '',
+          dataUri: '',
         }))
-      : [{ url: '', label: '' }]
+      : [{ url: '', label: '', localUri: '', dataUri: '' }]
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -115,6 +119,42 @@ const CreateProjectScreen = ({ navigation, route }) => {
       setStep(3);
     }
   }, [existingProject]);
+
+  useEffect(() => {
+    (async () => {
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+    })();
+  }, []);
+
+  const pickAttachment = async (index) => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== 'granted') {
+      Alert.alert('Permission required', 'Please grant photo access to attach images.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      base64: true,
+      quality: 0.7,
+    });
+
+    if (result.canceled) return;
+    const asset = result.assets?.[0];
+    if (!asset) return;
+
+    const dataUri = asset.base64 ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` : '';
+    setAttachments((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        localUri: asset.uri || '',
+        dataUri: dataUri || '',
+        url: dataUri || asset.uri || next[index].url,
+      };
+      return next;
+    });
+  };
 
   const handleSubmit = async () => {
     if (!user?.id) {
@@ -334,6 +374,20 @@ const CreateProjectScreen = ({ navigation, route }) => {
                 </TouchableOpacity>
               )}
             </View>
+            <TouchableOpacity
+              style={styles.pickButton}
+              onPress={() => pickAttachment(index)}
+            >
+              <Text style={styles.pickButtonText}>
+                {attachment.localUri || attachment.url ? 'Change Image' : 'Pick from Library'}
+              </Text>
+            </TouchableOpacity>
+            {(attachment.localUri || attachment.url) ? (
+              <Image
+                source={{ uri: attachment.localUri || attachment.url }}
+                style={styles.preview}
+              />
+            ) : null}
             <TextInput
               style={styles.input}
               placeholder="Image or drawing URL"

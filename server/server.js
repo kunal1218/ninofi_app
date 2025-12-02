@@ -4,10 +4,13 @@ const crypto = require('crypto');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const SALT_ROUNDS = 10;
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const ENV_VARIABLES = [
   { key: 'PORT', label: 'Server port' },
   { key: 'NODE_ENV', label: 'Node environment' },
@@ -34,6 +37,8 @@ const ENV_VARIABLES = [
 
 app.use(cors());
 app.use(express.json());
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+app.use('/uploads', express.static(UPLOAD_DIR));
 
 const normalizeRole = (role) => (role || 'unknown').toLowerCase();
 
@@ -286,6 +291,36 @@ const escapeAttribute = (value = '') =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+
+const isDataUri = (value = '') => /^data:/i.test(value);
+
+const persistMedia = async (projectId, mediaItems = []) => {
+  const saved = [];
+  for (const item of mediaItems) {
+    if (!item.url) continue;
+    if (!isDataUri(item.url)) {
+      saved.push({ url: item.url, label: item.label || '' });
+      continue;
+    }
+
+    try {
+      const [meta, base64Data] = item.url.split(',');
+      const mimeMatch = /data:(.*?);base64/.exec(meta || '');
+      const mimeType = mimeMatch?.[1] || 'image/jpeg';
+      const extension = mimeType.split('/')[1] || 'jpg';
+      const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${extension}`;
+      const projectDir = path.join(UPLOAD_DIR, projectId);
+      await fs.promises.mkdir(projectDir, { recursive: true });
+      const filePath = path.join(projectDir, filename);
+      await fs.promises.writeFile(filePath, base64Data || '', 'base64');
+      const relativePath = path.relative(__dirname, filePath);
+      saved.push({ url: `/${relativePath}`, label: item.label || '' });
+    } catch (err) {
+      console.error('Error saving media file:', err);
+    }
+  }
+  return saved;
+};
 
 app.get('/', (req, res) => {
   res.send(`
@@ -577,7 +612,6 @@ app.post('/api/projects', async (req, res) => {
       address,
       milestones,
       media,
-      media,
     } = req.body || {};
 
     if (!userId || !title) {
@@ -593,7 +627,6 @@ app.post('/api/projects', async (req, res) => {
     const projectId =
       crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
     const normalizedMilestones = validateMilestones(milestones);
-    const normalizedMedia = validateMedia(media);
     const normalizedMedia = validateMedia(media);
     const budgetNumber =
       estimatedBudget === undefined || estimatedBudget === null || estimatedBudget === ''
@@ -641,8 +674,9 @@ app.post('/api/projects', async (req, res) => {
       milestoneResults.push(result.rows[0]);
     }
 
+    const persistedMedia = await persistMedia(projectId, normalizedMedia);
     const mediaResults = [];
-    for (const item of normalizedMedia) {
+    for (const item of persistedMedia) {
       const mediaId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
       const result = await client.query(
         `
@@ -685,6 +719,7 @@ app.put('/api/projects/:projectId', async (req, res) => {
       timeline,
       address,
       milestones,
+      media,
     } = req.body || {};
 
     if (!projectId || !userId || !title) {
@@ -702,6 +737,7 @@ app.put('/api/projects/:projectId', async (req, res) => {
     }
 
     const normalizedMilestones = validateMilestones(milestones);
+    const normalizedMedia = validateMedia(media);
     const budgetNumber =
       estimatedBudget === undefined || estimatedBudget === null || estimatedBudget === ''
         ? null
@@ -756,8 +792,9 @@ app.put('/api/projects/:projectId', async (req, res) => {
       milestoneResults.push(result.rows[0]);
     }
 
+    const persistedMedia = await persistMedia(projectId, normalizedMedia);
     const mediaResults = [];
-    for (const item of normalizedMedia) {
+    for (const item of persistedMedia) {
       const mediaId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
       const result = await client.query(
         `

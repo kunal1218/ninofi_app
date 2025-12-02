@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView, ScrollView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearNotifications } from '../../store/notificationSlice';
 import { loadNotifications } from '../../services/notifications';
 import palette from '../../styles/palette';
 
-const NotificationsScreen = () => {
+const NotificationsScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const { items } = useSelector((state) => state.notifications);
@@ -33,20 +33,27 @@ const NotificationsScreen = () => {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Notifications</Text>
         {items.length === 0 && <Text style={styles.muted}>No notifications.</Text>}
-        {items.map((n, idx) => (
-          <View key={n.id || idx} style={styles.card}>
-            <Text style={styles.cardTitle}>{n.title}</Text>
-            <Text style={styles.cardBody}>{n.body}</Text>
-            {n.data?.contractorName && (
-              <Text style={styles.meta}>
-                Contractor: {n.data.contractorName} ({n.data.contractorEmail || 'No email'})
-              </Text>
-            )}
-            {n.data?.projectTitle && (
-              <Text style={styles.meta}>Project: {n.data.projectTitle}</Text>
-            )}
-          </View>
-        ))}
+        {items.map((n, idx) => {
+          const key = `${n.id || 'local'}-${idx}`;
+          return (
+            <TouchableOpacity
+              key={key}
+              style={styles.card}
+              onPress={() => navigation.navigate('NotificationDetail', { notification: n })}
+            >
+              <Text style={styles.cardTitle}>{n.title}</Text>
+              <Text style={styles.cardBody}>{n.body}</Text>
+              {n.data?.contractorName && (
+                <Text style={styles.meta}>
+                  Contractor: {n.data.contractorName} ({n.data.contractorEmail || 'No email'})
+                </Text>
+              )}
+              {n.data?.projectTitle && (
+                <Text style={styles.meta}>Project: {n.data.projectTitle}</Text>
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
     </SafeAreaView>
   );

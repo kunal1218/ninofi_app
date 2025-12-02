@@ -11,3 +11,7 @@ export const loadNotifications = (userId) => async (dispatch) => {
     return { success: false, error: error.response?.data?.message || 'Failed to load notifications' };
   }
 };
+
+export const decideApplication = (applicationId, action, ownerId) => {
+  return api.decideApplication(applicationId, action, ownerId);
+};

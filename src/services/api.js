@@ -92,6 +92,8 @@ export const projectAPI = {
     api.delete(`/projects/${id}`, { data: userId ? { userId } : undefined }),
   applyToProject: async (projectId, payload) =>
     api.post(`/projects/${projectId}/apply`, payload),
+  decideApplication: async (applicationId, action, ownerId) =>
+    api.post(`/applications/${applicationId}/${action}`, ownerId ? { ownerId } : {}),
 };
 
 // Invoice API calls (mocked for now)

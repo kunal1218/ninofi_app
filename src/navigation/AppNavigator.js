@@ -29,6 +29,7 @@ import ProjectsListScreen from '../screens/homeowner/ProjectsListScreen';
 import FindJobsScreen from '../screens/contractor/FindJobsScreen';
 import ContractorProjectDetailsScreen from '../screens/contractor/ContractorProjectDetailsScreen';
 import NotificationsScreen from '../screens/shared/NotificationsScreen';
+import NotificationDetailScreen from '../screens/shared/NotificationDetailScreen';
 import { setAuthToken } from '../services/api';
 
 const RootStack = createStackNavigator();
@@ -95,6 +96,11 @@ const MainAppStack = () => (
         name="Notifications"
         component={NotificationsScreen}
         options={{ title: 'Notifications' }}
+      />
+      <MainStack.Screen
+        name="NotificationDetail"
+        component={NotificationDetailScreen}
+        options={{ title: 'Request' }}
       />
       <MainStack.Screen
         name="FundProject"

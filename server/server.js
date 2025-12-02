@@ -858,6 +858,13 @@ app.post('/api/applications/:applicationId/:action', async (req, res) => {
     }
 
     await client.query('BEGIN');
+    console.log('[applications:update] start', {
+      applicationId,
+      action,
+      ownerId: ownerId || null,
+      projectId: appRow.project_id,
+      contractorId: appRow.contractor_id,
+    });
     await client.query(
       'UPDATE project_applications SET status = $1 WHERE id::text = $2',
       [newStatus, applicationId]
@@ -884,10 +891,11 @@ app.post('/api/applications/:applicationId/:action', async (req, res) => {
     );
 
     await client.query('COMMIT');
+    console.log('[applications:update] success', { applicationId, newStatus });
     return res.json({ status: newStatus });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
-    console.error('Error updating application:', error);
+    console.error('Error updating application:', { applicationId }, error);
     const message = pool
       ? 'Failed to update application'
       : 'Database is not configured (set DATABASE_URL)';
@@ -932,6 +940,13 @@ app.post('/api/applications/decide', async (req, res) => {
     }
 
     await client.query('BEGIN');
+    console.log('[applications:decide] start', {
+      projectId,
+      contractorId,
+      ownerId: ownerId || null,
+      action,
+      newStatus,
+    });
     await client.query(
       'UPDATE project_applications SET status = $1 WHERE project_id = $2 AND contractor_id = $3',
       [newStatus, projectId, contractorId]
@@ -958,10 +973,11 @@ app.post('/api/applications/decide', async (req, res) => {
     );
 
     await client.query('COMMIT');
+    console.log('[applications:decide] success', { projectId, contractorId, newStatus });
     return res.json({ status: newStatus });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
-    console.error('Error updating application (by project/contractor):', error);
+    console.error('Error updating application (by project/contractor):', { projectId: req.body?.projectId, contractorId: req.body?.contractorId }, error);
     const message = pool
       ? 'Failed to update application'
       : 'Database is not configured (set DATABASE_URL)';

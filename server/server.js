@@ -201,6 +201,7 @@ const initDb = async () => {
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON notifications (user_id, created_at DESC)');
+  await pool.query('CREATE INDEX IF NOT EXISTS notifications_project_idx ON notifications USING GIN ((data->>\'projectId\'))');
 };
 
 const dbReady = (async () => {
@@ -926,6 +927,74 @@ app.post('/api/applications/decide', async (req, res) => {
   }
 });
 
+app.get('/api/applications/contractor/:contractorId', async (req, res) => {
+  try {
+    const { contractorId } = req.params;
+    if (!contractorId) {
+      return res.status(400).json({ message: 'contractorId is required' });
+    }
+    await assertDbReady();
+    const result = await pool.query(
+      `
+        SELECT
+          pa.*,
+          p.title AS project_title,
+          p.address AS project_address,
+          p.estimated_budget,
+          p.user_id AS owner_id,
+          u.full_name AS owner_full_name
+        FROM project_applications pa
+        JOIN projects p ON p.id = pa.project_id
+        JOIN users u ON u.id = p.user_id
+        WHERE pa.contractor_id = $1
+        ORDER BY pa.created_at DESC
+      `,
+      [contractorId]
+    );
+    res.json(result.rows.map(mapApplicationRow));
+  } catch (error) {
+    console.error('Error fetching contractor applications:', error);
+    const message = pool
+      ? 'Failed to fetch applications'
+      : 'Database is not configured (set DATABASE_URL)';
+    res.status(500).json({ message });
+  }
+});
+
+app.delete('/api/applications/:applicationId', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { applicationId } = req.params;
+    const { contractorId } = req.body || {};
+    if (!applicationId) {
+      return res.status(400).json({ message: 'applicationId is required' });
+    }
+    await assertDbReady();
+
+    const existing = await client.query(
+      'SELECT * FROM project_applications WHERE id = $1',
+      [applicationId]
+    );
+    if (!existing.rows.length) {
+      return res.status(404).json({ message: 'Application not found' });
+    }
+    if (contractorId && existing.rows[0].contractor_id !== contractorId) {
+      return res.status(403).json({ message: 'Not authorized to delete this application' });
+    }
+
+    await client.query('DELETE FROM project_applications WHERE id = $1', [applicationId]);
+    return res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting application:', error);
+    const message = pool
+      ? 'Failed to delete application'
+      : 'Database is not configured (set DATABASE_URL)';
+    res.status(500).json({ message });
+  } finally {
+    client.release();
+  }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -1214,6 +1283,7 @@ app.delete('/api/projects/:projectId', async (req, res) => {
     await client.query('BEGIN');
     // milestones are deleted via ON DELETE CASCADE
     await client.query('DELETE FROM projects WHERE id = $1', [projectId]);
+    await client.query('DELETE FROM notifications WHERE data->>\'projectId\' = $1', [projectId]);
     await client.query('COMMIT');
 
     return res.status(204).send();

@@ -109,6 +109,14 @@ const ContractorDashboard = ({ navigation }) => {
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.actionCard, shadowCard]}
+              onPress={() => navigation.navigate('Applications')}
+            >
+              <Text style={styles.actionIcon}>📄</Text>
+              <Text style={styles.actionTitle}>My Applications</Text>
+              <Text style={styles.actionText}>Manage/withdraw</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.actionCard, shadowCard]}
               onPress={() => navigation.navigate('SubmitMilestone', {
                 project: projects[0],
                 milestone: { name: projects[0].nextMilestone, amount: projects[0].amount }

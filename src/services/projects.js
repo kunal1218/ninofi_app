@@ -103,3 +103,8 @@ export const loadContractorProjects = (contractorId) => async (dispatch) => {
     return { success: false, error: msg };
   }
 };
+
+export const loadContractorApplications = (contractorId) => projectAPI.getApplicationsForContractor(contractorId);
+
+export const withdrawApplication = (applicationId, contractorId) =>
+  projectAPI.deleteApplication(applicationId, contractorId);

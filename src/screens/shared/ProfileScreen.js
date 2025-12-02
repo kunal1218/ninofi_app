@@ -54,7 +54,10 @@ const ProfileScreen = ({ navigation: propNavigation }) => {
           style: 'destructive',
           onPress: async () => {
             await dispatch(logout());
-            Alert.alert('Success', 'You have been logged out');
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Welcome' }],
+            });
           }
         }
       ]

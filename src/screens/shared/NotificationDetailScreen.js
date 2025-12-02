@@ -26,20 +26,20 @@ const NotificationDetailScreen = ({ route, navigation }) => {
     }
   }
   const handleDecision = async (action) => {
-    const hasAppId = Boolean(data.applicationId);
     const hasProjectAndContractor = data.projectId && data.contractorId;
-    if (!hasAppId && !hasProjectAndContractor) return;
+    const hasAppId = Boolean(data.applicationId);
+    if (!hasProjectAndContractor && !hasAppId) return;
     setIsSubmitting(true);
     try {
-      if (hasAppId) {
-        await decideApplication(data.applicationId, action, user?.id);
-      } else {
+      if (hasProjectAndContractor) {
         await decideApplicationByProject({
           projectId: data.projectId,
           contractorId: data.contractorId,
           ownerId: user?.id,
           action,
         });
+      } else if (hasAppId) {
+        await decideApplication(data.applicationId, action, user?.id);
       }
       Alert.alert(
         'Updated',
@@ -53,7 +53,7 @@ const NotificationDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  const canDecide = Boolean(data.applicationId || (data.projectId && data.contractorId));
+  const canDecide = Boolean(data.projectId && data.contractorId) || Boolean(data.applicationId);
 
   return (
     <SafeAreaView style={styles.container}>

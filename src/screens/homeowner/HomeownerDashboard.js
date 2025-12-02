@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -7,16 +7,38 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { useFocusEffect } from '@react-navigation/native';
 import palette from '../../styles/palette';
+import { loadProjectsForUser } from '../../services/projects';
 
 const HomeownerDashboard = ({ navigation }) => {
+  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
-  const { projects } = useSelector((state) => state.projects);
+  const { projects, isLoading } = useSelector((state) => state.projects);
+
+  const fetchProjects = useCallback(() => {
+    if (user?.id) {
+      dispatch(loadProjectsForUser(user.id));
+    }
+  }, [dispatch, user?.id]);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProjects();
+    }, [fetchProjects])
+  );
 
   const stats = {
     activeProjects: projects?.length || 0,
-    inEscrow: projects?.reduce((sum, project) => sum + (project.budget || 0), 0),
+    inEscrow: projects?.reduce(
+      (sum, project) => sum + (project.estimatedBudget || 0),
+      0
+    ),
   };
 
   return (
@@ -81,40 +103,61 @@ const HomeownerDashboard = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          {projects?.map((project) => (
+          {isLoading && (
+            <Text style={styles.loadingText}>Loading projects…</Text>
+          )}
+
+          {!isLoading && (!projects || projects.length === 0) && (
+            <Text style={styles.mutedText}>No projects yet. Create one to get started.</Text>
+          )}
+
+          {projects?.map((project) => {
+            const progress =
+              project.milestones && project.milestones.length
+                ? Math.round(
+                    (project.milestones.filter((m) => m.status === 'completed').length /
+                      project.milestones.length) *
+                      100
+                  )
+                : 0;
+
+            return (
             <TouchableOpacity 
               key={project.id}
               style={styles.projectCard}
-              onPress={() => navigation.navigate('ProjectDetails', { project })}
+              onPress={() => navigation.navigate('CreateProject', { project })}
             >
               <View style={styles.projectHeader}>
                 <Text style={styles.projectTitle}>{project.title}</Text>
-                <Text style={styles.projectStatus}>{project.status}</Text>
+                <Text style={styles.projectStatus}>{project.projectType || 'Project'}</Text>
               </View>
               
               <Text style={styles.projectContractor}>
-                With {project.contractor}
+                {project.address || 'No address provided'}
               </Text>
               
               <View style={styles.progressContainer}>
                 <Text style={styles.progressLabel}>Progress</Text>
-                <Text style={styles.progressValue}>{project.progress}%</Text>
+                <Text style={styles.progressValue}>{progress}%</Text>
               </View>
               <View style={styles.progressBar}>
                 <View 
                   style={[
                     styles.progressFill, 
-                    { width: `${project.progress}%` }
+                    { width: `${progress}%` }
                   ]} 
                 />
               </View>
               
               <View style={styles.projectFooter}>
-                <Text style={styles.budget}>Budget: ${project.budget}</Text>
-                <Text style={styles.viewDetails}>View Details →</Text>
+                <Text style={styles.budget}>
+                  Budget: ${Number(project.estimatedBudget || 0).toLocaleString()}
+                </Text>
+                <Text style={styles.viewDetails}>Edit →</Text>
               </View>
             </TouchableOpacity>
-          ))}
+          );
+          })}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -308,6 +351,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  loadingText: {
+    color: palette.muted,
+    marginBottom: 12,
+  },
+  mutedText: {
+    color: palette.muted,
   },
   budget: {
     fontSize: 14,

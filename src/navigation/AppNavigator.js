@@ -1,6 +1,7 @@
 import { createStackNavigator } from '@react-navigation/stack';
 import React from 'react';
 import { useSelector } from 'react-redux';
+import { useEffect } from 'react';
 
 // Auth screens
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -24,12 +25,20 @@ import ProjectDetailsScreen from '../screens/homeowner/ProjectDetailsScreen';
 import ReviewMilestoneScreen from '../screens/homeowner/ReviewMilestoneScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import WalletScreen from '../screens/shared/WalletScreen';
+import { setAuthToken } from '../services/api';
 
 const RootStack = createStackNavigator();
 const MainStack = createStackNavigator();
 
 const AppNavigator = () => {
-  const { isAuthenticated, role } = useSelector((state) => state.auth);
+  const auth = useSelector((state) => state.auth);
+  const { isAuthenticated, role } = auth;
+
+  useEffect(() => {
+    if (isAuthenticated && auth?.token) {
+      setAuthToken(auth.token);
+    }
+  }, [isAuthenticated, auth?.token]);
 
   const getDashboardScreen = () => {
     switch (role) {

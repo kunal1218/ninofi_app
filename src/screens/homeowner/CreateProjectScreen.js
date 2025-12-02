@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -11,23 +11,34 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useDispatch } from 'react-redux';
-import { addProject } from '../../store/projectSlice';
+import { useDispatch, useSelector } from 'react-redux';
+import { saveProject } from '../../services/projects';
 
-const CreateProjectScreen = ({ navigation }) => {
+const CreateProjectScreen = ({ navigation, route }) => {
   const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.auth);
+  const existingProject = route?.params?.project;
+
   const [step, setStep] = useState(1);
-  const [projectType, setProjectType] = useState('');
+  const [projectType, setProjectType] = useState(existingProject?.projectType || '');
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    budget: '',
-    timeline: '',
-    address: '',
+    title: existingProject?.title || '',
+    description: existingProject?.description || '',
+    estimatedBudget: existingProject?.estimatedBudget?.toString() || '',
+    timeline: existingProject?.timeline || '',
+    address: existingProject?.address || '',
   });
   const [milestones, setMilestones] = useState([
-    { name: '', amount: '', description: '' }
+    ...(existingProject?.milestones?.length
+      ? existingProject.milestones.map((m, idx) => ({
+          name: m.name || '',
+          amount: m.amount?.toString?.() || '',
+          description: m.description || '',
+          position: idx,
+        }))
+      : [{ name: '', amount: '', description: '' }]),
   ]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const projectTypes = [
     { id: 'kitchen', label: 'Kitchen', icon: '🍳' },
@@ -58,7 +69,7 @@ const CreateProjectScreen = ({ navigation }) => {
 
   const handleContinue = () => {
     if (step === 1) {
-      if (!formData.title || !projectType || !formData.description || !formData.budget) {
+      if (!formData.title || !projectType || !formData.description || !formData.estimatedBudget) {
         Alert.alert('Required', 'Please fill in all required fields');
         return;
       }
@@ -74,8 +85,19 @@ const CreateProjectScreen = ({ navigation }) => {
     }
   };
 
-  const handleSubmit = () => {
-    const budgetValue = parseFloat(formData.budget);
+  useEffect(() => {
+    if (existingProject) {
+      setStep(3);
+    }
+  }, [existingProject]);
+
+  const handleSubmit = async () => {
+    if (!user?.id) {
+      Alert.alert('Not signed in', 'Please log in again.');
+      return;
+    }
+
+    const budgetValue = parseFloat(formData.estimatedBudget);
     const totalMilestones = milestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0);
 
     if (Number.isNaN(budgetValue)) {
@@ -88,28 +110,38 @@ const CreateProjectScreen = ({ navigation }) => {
       return;
     }
 
-    const projectData = {
-      id: Date.now().toString(),
+    const projectPayload = {
+      id: existingProject?.id,
+      userId: user.id,
       title: formData.title.trim(),
-      contractor: 'Pending Contractor Match',
-      status: 'Draft',
-      progress: 0,
-      budget: budgetValue,
+      projectType,
+      description: formData.description,
+      estimatedBudget: budgetValue,
       timeline: formData.timeline,
       address: formData.address,
-      projectType,
       milestones: milestones.map((milestone, index) => ({
-        ...milestone,
-        id: `${Date.now()}-${index}`,
-        amount: parseFloat(milestone.amount) || 0,
+        name: milestone.name,
+        amount: parseFloat(milestone.amount) || null,
+        description: milestone.description,
+        position: milestone.position ?? index,
       })),
     };
 
-    dispatch(addProject(projectData));
-
-    Alert.alert('Success', 'Project created! Now fund it to get started.', [
-      { text: 'OK', onPress: () => navigation.navigate('Dashboard') }
-    ]);
+    try {
+      setIsSubmitting(true);
+      const result = await dispatch(saveProject(projectPayload));
+      if (result?.success) {
+        Alert.alert('Success', `Project ${existingProject ? 'updated' : 'created'}!`, [
+          { text: 'OK', onPress: () => navigation.navigate('Dashboard') },
+        ]);
+      } else {
+        Alert.alert('Error', result?.error || 'Failed to save project');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save project');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderStep1 = () => (
@@ -161,8 +193,8 @@ const CreateProjectScreen = ({ navigation }) => {
         style={styles.input}
         placeholder="Enter amount in USD"
         keyboardType="numeric"
-        value={formData.budget}
-        onChangeText={(value) => updateField('budget', value)}
+        value={formData.estimatedBudget}
+        onChangeText={(value) => updateField('estimatedBudget', value)}
       />
     </View>
   );

@@ -1,6 +1,8 @@
 import Constants from 'expo-constants';
 import axios from 'axios';
 
+let authToken = null;
+
 const resolveBaseUrl = () => {
   // Preferred: explicit env var for Railway
   if (process.env.EXPO_PUBLIC_API_URL) {
@@ -33,11 +35,9 @@ const api = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    // Token will be added here once we have it
-    // const token = store.getState().auth.token;
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    if (authToken) {
+      config.headers.Authorization = `Bearer ${authToken}`;
+    }
     return config;
   },
   (error) => {
@@ -76,32 +76,16 @@ export const authAPI = {
   },
 };
 
+export const setAuthToken = (token) => {
+  authToken = token || null;
+};
+
 // Project API calls
 export const projectAPI = {
-  getProjects: async () => {
-    // return api.get('/projects');
-    return Promise.resolve({ data: [] });
-  },
-
-  getProjectById: async (id) => {
-    // return api.get(`/projects/${id}`);
-    return Promise.resolve({ data: {} });
-  },
-
-  createProject: async (projectData) => {
-    // return api.post('/projects', projectData);
-    return Promise.resolve({ data: projectData });
-  },
-
-  updateProject: async (id, projectData) => {
-    // return api.put(`/projects/${id}`, projectData);
-    return Promise.resolve({ data: projectData });
-  },
-
-  deleteProject: async (id) => {
-    // return api.delete(`/projects/${id}`);
-    return Promise.resolve({ data: { id } });
-  },
+  getProjectsForUser: async (userId) => api.get(`/projects/user/${userId}`),
+  createProject: async (projectData) => api.post('/projects', projectData),
+  updateProject: async (id, projectData) => api.put(`/projects/${id}`, projectData),
+  deleteProject: async (id) => api.delete(`/projects/${id}`),
 };
 
 // Invoice API calls (mocked for now)

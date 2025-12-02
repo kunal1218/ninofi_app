@@ -99,6 +99,35 @@ const initDb = async () => {
 
   await pool.query('CREATE INDEX IF NOT EXISTS users_role_idx ON users (role)');
   await pool.query('CREATE INDEX IF NOT EXISTS users_created_at_idx ON users (created_at DESC)');
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id UUID PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      project_type TEXT,
+      description TEXT,
+      estimated_budget NUMERIC,
+      timeline TEXT,
+      address TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS milestones (
+      id UUID PRIMARY KEY,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      amount NUMERIC,
+      description TEXT,
+      position INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query('CREATE INDEX IF NOT EXISTS projects_user_id_idx ON projects (user_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS milestones_project_id_idx ON milestones (project_id, position)');
 };
 
 const dbReady = (async () => {
@@ -137,6 +166,54 @@ const getUserByEmail = async (email) => {
   return result.rows[0] || null;
 };
 
+const getUserById = async (userId) => {
+  await assertDbReady();
+  const result = await pool.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [userId]);
+  return result.rows[0] || null;
+};
+
+const mapMilestoneRow = (row = {}) => ({
+  id: row.id,
+  name: row.name,
+  amount: row.amount !== null && row.amount !== undefined ? Number(row.amount) : null,
+  description: row.description || '',
+  position: typeof row.position === 'number' ? row.position : 0,
+});
+
+const mapProjectRow = (row = {}, milestones = []) => ({
+  id: row.id,
+  userId: row.user_id,
+  title: row.title,
+  projectType: row.project_type || '',
+  description: row.description || '',
+  estimatedBudget:
+    row.estimated_budget !== null && row.estimated_budget !== undefined
+      ? Number(row.estimated_budget)
+      : null,
+  timeline: row.timeline || '',
+  address: row.address || '',
+  createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+  milestones,
+});
+
+const validateMilestones = (milestones = []) => {
+  if (!Array.isArray(milestones)) return [];
+  return milestones
+    .map((m, idx) => {
+      if (!m || !m.name) return null;
+      const amountNum =
+        m.amount === undefined || m.amount === null || m.amount === ''
+          ? null
+          : Number(m.amount);
+      return {
+        name: m.name,
+        amount: Number.isFinite(amountNum) ? amountNum : null,
+        description: m.description || '',
+        position: Number.isInteger(m.position) ? m.position : idx,
+      };
+    })
+    .filter(Boolean);
+};
 const getJwtSecret = () => {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
@@ -449,6 +526,303 @@ app.post('/api/auth/login', async (req, res) => {
       : error?.message?.includes('JWT_SECRET')
       ? 'JWT secret is not configured (set JWT_SECRET)'
       : 'Failed to login';
+    return res.status(500).json({ message });
+  }
+});
+
+app.post('/api/projects', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const {
+      userId,
+      title,
+      projectType,
+      description,
+      estimatedBudget,
+      timeline,
+      address,
+      milestones,
+    } = req.body || {};
+
+    if (!userId || !title) {
+      return res.status(400).json({ message: 'userId and title are required' });
+    }
+
+    await assertDbReady();
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const projectId =
+      crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+    const normalizedMilestones = validateMilestones(milestones);
+    const budgetNumber =
+      estimatedBudget === undefined || estimatedBudget === null || estimatedBudget === ''
+        ? null
+        : Number(estimatedBudget);
+
+    await client.query('BEGIN');
+    const projectResult = await client.query(
+      `
+        INSERT INTO projects (id, user_id, title, project_type, description, estimated_budget, timeline, address)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *
+      `,
+      [
+        projectId,
+        userId,
+        title,
+        projectType || '',
+        description || '',
+        Number.isFinite(budgetNumber) ? budgetNumber : null,
+        timeline || '',
+        address || '',
+      ]
+    );
+
+    const milestoneResults = [];
+    for (const m of normalizedMilestones) {
+      const milestoneId =
+        crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+      const result = await client.query(
+        `
+          INSERT INTO milestones (id, project_id, name, amount, description, position)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING *
+        `,
+        [
+          milestoneId,
+          projectId,
+          m.name,
+          Number.isFinite(m.amount) ? m.amount : null,
+          m.description || '',
+          m.position || 0,
+        ]
+      );
+      milestoneResults.push(result.rows[0]);
+    }
+
+    await client.query('COMMIT');
+
+    return res.status(201).json(
+      mapProjectRow(projectResult.rows[0], milestoneResults.map(mapMilestoneRow))
+    );
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error creating project:', error);
+    const message = pool
+      ? 'Failed to create project'
+      : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  } finally {
+    client.release();
+  }
+});
+
+app.put('/api/projects/:projectId', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { projectId } = req.params;
+    const {
+      userId,
+      title,
+      projectType,
+      description,
+      estimatedBudget,
+      timeline,
+      address,
+      milestones,
+    } = req.body || {};
+
+    if (!projectId || !userId || !title) {
+      return res.status(400).json({ message: 'projectId, userId, and title are required' });
+    }
+
+    await assertDbReady();
+
+    const existing = await client.query(
+      'SELECT * FROM projects WHERE id = $1 AND user_id = $2 LIMIT 1',
+      [projectId, userId]
+    );
+    if (!existing.rows.length) {
+      return res.status(404).json({ message: 'Project not found for this user' });
+    }
+
+    const normalizedMilestones = validateMilestones(milestones);
+    const budgetNumber =
+      estimatedBudget === undefined || estimatedBudget === null || estimatedBudget === ''
+        ? null
+        : Number(estimatedBudget);
+
+    await client.query('BEGIN');
+    const updatedProject = await client.query(
+      `
+        UPDATE projects
+        SET title = $1,
+            project_type = $2,
+            description = $3,
+            estimated_budget = $4,
+            timeline = $5,
+            address = $6
+        WHERE id = $7
+        RETURNING *
+      `,
+      [
+        title,
+        projectType || '',
+        description || '',
+        Number.isFinite(budgetNumber) ? budgetNumber : null,
+        timeline || '',
+        address || '',
+        projectId,
+      ]
+    );
+
+    await client.query('DELETE FROM milestones WHERE project_id = $1', [projectId]);
+
+    const milestoneResults = [];
+    for (const m of normalizedMilestones) {
+      const milestoneId =
+        crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+      const result = await client.query(
+        `
+          INSERT INTO milestones (id, project_id, name, amount, description, position)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING *
+        `,
+        [
+          milestoneId,
+          projectId,
+          m.name,
+          Number.isFinite(m.amount) ? m.amount : null,
+          m.description || '',
+          m.position || 0,
+        ]
+      );
+      milestoneResults.push(result.rows[0]);
+    }
+
+    await client.query('COMMIT');
+
+    return res.json(
+      mapProjectRow(updatedProject.rows[0], milestoneResults.map(mapMilestoneRow))
+    );
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error updating project:', error);
+    const message = pool
+      ? 'Failed to update project'
+      : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete('/api/projects/:projectId', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { projectId } = req.params;
+    const { userId } = req.body || {};
+
+    if (!projectId) {
+      return res.status(400).json({ message: 'projectId is required' });
+    }
+
+    await assertDbReady();
+
+    if (userId) {
+      const existing = await client.query(
+        'SELECT 1 FROM projects WHERE id = $1 AND user_id = $2 LIMIT 1',
+        [projectId, userId]
+      );
+      if (!existing.rows.length) {
+        return res.status(404).json({ message: 'Project not found for this user' });
+      }
+    }
+
+    await client.query('BEGIN');
+    // milestones are deleted via ON DELETE CASCADE
+    await client.query('DELETE FROM projects WHERE id = $1', [projectId]);
+    await client.query('COMMIT');
+
+    return res.status(204).send();
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error deleting project:', error);
+    const message = pool
+      ? 'Failed to delete project'
+      : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/api/projects/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required' });
+    }
+
+    await assertDbReady();
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const result = await pool.query(
+      `
+        SELECT
+          p.*,
+          m.id AS milestone_id,
+          m.name AS milestone_name,
+          m.amount AS milestone_amount,
+          m.description AS milestone_description,
+          m.position AS milestone_position,
+          m.created_at AS milestone_created_at
+        FROM projects p
+        LEFT JOIN milestones m ON m.project_id = p.id
+        WHERE p.user_id = $1
+        ORDER BY p.created_at DESC, m.position ASC, m.created_at ASC
+      `,
+      [userId]
+    );
+
+    const grouped = new Map();
+    for (const row of result.rows) {
+      if (!grouped.has(row.id)) {
+        grouped.set(row.id, {
+          project: row,
+          milestones: [],
+        });
+      }
+      if (row.milestone_id) {
+        grouped.get(row.id).milestones.push(
+          mapMilestoneRow({
+            id: row.milestone_id,
+            name: row.milestone_name,
+            amount: row.milestone_amount,
+            description: row.milestone_description,
+            position: row.milestone_position,
+            created_at: row.milestone_created_at,
+          })
+        );
+      }
+    }
+
+    const projects = Array.from(grouped.values()).map(({ project, milestones }) =>
+      mapProjectRow(project, milestones)
+    );
+
+    return res.json(projects);
+  } catch (error) {
+    console.error('Error fetching projects:', error);
+    const message = pool
+      ? 'Failed to fetch projects'
+      : 'Database is not configured (set DATABASE_URL)';
     return res.status(500).json({ message });
   }
 });

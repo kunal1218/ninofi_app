@@ -769,6 +769,18 @@ app.get('/api/notifications/:userId', async (req, res) => {
       return res.status(400).json({ message: 'userId is required' });
     }
     await assertDbReady();
+    // Clean notifications for deleted projects
+    await pool.query(
+      `
+        DELETE FROM notifications n
+        WHERE n.user_id = $1
+          AND n.data->>'projectId' IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM projects p WHERE p.id::text = n.data->>'projectId'
+          )
+      `,
+      [userId]
+    );
     const result = await pool.query(
       'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC',
       [userId]

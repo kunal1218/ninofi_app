@@ -200,8 +200,12 @@ const initDb = async () => {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
-  await pool.query('CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON notifications (user_id, created_at DESC)');
-  await pool.query('CREATE INDEX IF NOT EXISTS notifications_project_idx ON notifications USING GIN ((data->>\'projectId\'))');
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON notifications (user_id, created_at DESC)'
+  );
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS notifications_project_idx ON notifications ((data->>\'projectId\'))'
+  );
 };
 
 const dbReady = (async () => {

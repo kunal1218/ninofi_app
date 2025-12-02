@@ -852,6 +852,80 @@ app.post('/api/applications/:applicationId/:action', async (req, res) => {
   }
 });
 
+app.post('/api/applications/decide', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { projectId, contractorId, ownerId, action } = req.body || {};
+    if (!projectId || !contractorId || !action) {
+      return res
+        .status(400)
+        .json({ message: 'projectId, contractorId, and action are required' });
+    }
+    const newStatus = action === 'accept' ? 'accepted' : action === 'deny' ? 'denied' : null;
+    if (!newStatus) {
+      return res.status(400).json({ message: 'Action must be accept or deny' });
+    }
+
+    await assertDbReady();
+    const appResult = await client.query(
+      `
+        SELECT pa.*, p.user_id AS owner_id, p.title AS project_title, u.full_name AS contractor_name, u.email AS contractor_email, u.phone AS contractor_phone
+        FROM project_applications pa
+        JOIN projects p ON p.id = pa.project_id
+        JOIN users u ON u.id = pa.contractor_id
+        WHERE pa.project_id = $1 AND pa.contractor_id = $2
+      `,
+      [projectId, contractorId]
+    );
+    if (!appResult.rows.length) {
+      return res.status(404).json({ message: 'Application not found' });
+    }
+
+    const appRow = appResult.rows[0];
+    if (ownerId && ownerId !== appRow.owner_id) {
+      return res.status(403).json({ message: 'Not authorized to modify this application' });
+    }
+
+    await client.query('BEGIN');
+    await client.query(
+      'UPDATE project_applications SET status = $1 WHERE project_id = $2 AND contractor_id = $3',
+      [newStatus, projectId, contractorId]
+    );
+
+    const notificationId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+    await client.query(
+      `
+        INSERT INTO notifications (id, user_id, title, body, data)
+        VALUES ($1, $2, $3, $4, $5)
+      `,
+      [
+        notificationId,
+        appRow.contractor_id,
+        `Your application was ${newStatus}`,
+        `${appRow.project_title} has been ${newStatus}`,
+        JSON.stringify({
+          projectId: appRow.project_id,
+          projectTitle: appRow.project_title,
+          applicationId: appRow.id,
+          status: newStatus,
+        }),
+      ]
+    );
+
+    await client.query('COMMIT');
+    return res.json({ status: newStatus });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error updating application (by project/contractor):', error);
+    const message = pool
+      ? 'Failed to update application'
+      : 'Database is not configured (set DATABASE_URL)';
+    res.status(500).json({ message });
+  } finally {
+    client.release();
+  }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};

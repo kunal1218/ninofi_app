@@ -15,3 +15,7 @@ export const loadNotifications = (userId) => async (dispatch) => {
 export const decideApplication = (applicationId, action, ownerId) => {
   return api.decideApplication(applicationId, action, ownerId);
 };
+
+export const decideApplicationByProject = (payload) => {
+  return api.decideApplicationByProject(payload);
+};

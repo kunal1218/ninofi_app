@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSelector } from 'react-redux';
 import palette from '../../styles/palette';
-import { decideApplication } from '../../services/notifications';
+import { decideApplication, decideApplicationByProject } from '../../services/notifications';
 
 const NotificationDetailScreen = ({ route, navigation }) => {
   const { notification } = route.params || {};
@@ -19,10 +19,21 @@ const NotificationDetailScreen = ({ route, navigation }) => {
 
   const data = notification.data || {};
   const handleDecision = async (action) => {
-    if (!data.applicationId) return;
+    const hasAppId = Boolean(data.applicationId);
+    const hasProjectAndContractor = data.projectId && data.contractorId;
+    if (!hasAppId && !hasProjectAndContractor) return;
     setIsSubmitting(true);
     try {
-      await decideApplication(data.applicationId, action, user?.id);
+      if (hasAppId) {
+        await decideApplication(data.applicationId, action, user?.id);
+      } else {
+        await decideApplicationByProject({
+          projectId: data.projectId,
+          contractorId: data.contractorId,
+          ownerId: user?.id,
+          action,
+        });
+      }
       Alert.alert(
         'Updated',
         `Application ${action === 'accept' ? 'accepted' : 'denied'}.`,
@@ -35,7 +46,7 @@ const NotificationDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  const canDecide = Boolean(data.applicationId);
+  const canDecide = Boolean(data.applicationId || (data.projectId && data.contractorId));
 
   return (
     <SafeAreaView style={styles.container}>

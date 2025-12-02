@@ -148,6 +148,27 @@ const initDb = async () => {
   await pool.query(
     'CREATE INDEX IF NOT EXISTS project_media_project_id_idx ON project_media (project_id)'
   );
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_applications (
+      id UUID PRIMARY KEY,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      contractor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      message TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(
+    'CREATE UNIQUE INDEX IF NOT EXISTS project_applications_unique ON project_applications (project_id, contractor_id)'
+  );
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS project_applications_project_id_idx ON project_applications (project_id)'
+  );
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS project_applications_contractor_id_idx ON project_applications (contractor_id)'
+  );
 };
 
 const dbReady = (async () => {
@@ -254,6 +275,24 @@ const validateMedia = (media = []) => {
     })
     .filter(Boolean);
 };
+
+const mapApplicationRow = (row = {}) => ({
+  id: row.id,
+  projectId: row.project_id,
+  contractorId: row.contractor_id,
+  status: row.status,
+  message: row.message || '',
+  createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+  contractor: row.contractor_id
+    ? {
+        id: row.contractor_id,
+        fullName: row.contractor_full_name,
+        email: row.contractor_email,
+        phone: row.contractor_phone,
+        role: row.contractor_role,
+      }
+    : null,
+});
 const getJwtSecret = () => {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
@@ -954,8 +993,10 @@ app.get('/api/projects/user/:userId', async (req, res) => {
 
 app.get('/api/projects/open', async (_req, res) => {
   try {
+    const contractorId = _req.query.contractorId || null;
     await assertDbReady();
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       SELECT
         p.*,
         m.id AS milestone_id,
@@ -967,12 +1008,19 @@ app.get('/api/projects/open', async (_req, res) => {
         pm.id AS media_id,
         pm.url AS media_url,
         pm.label AS media_label,
-        pm.created_at AS media_created_at
+        pm.created_at AS media_created_at,
+        pa.id AS app_id,
+        pa.status AS app_status,
+        pa.contractor_id AS app_contractor_id
       FROM projects p
       LEFT JOIN milestones m ON m.project_id = p.id
       LEFT JOIN project_media pm ON pm.project_id = p.id
+      LEFT JOIN project_applications pa ON pa.project_id = p.id AND pa.contractor_id = $1
+      WHERE ($1::uuid IS NULL OR pa.id IS NULL OR pa.status NOT IN ('pending','accepted'))
       ORDER BY p.created_at DESC, m.position ASC, m.created_at ASC, pm.created_at ASC
-    `);
+    `,
+      [contractorId]
+    );
 
     const grouped = new Map();
     for (const row of result.rows) {

@@ -8,6 +8,7 @@ const initialState = {
   openProjects: [],
   isLoadingOpen: false,
   openError: null,
+  appliedProjectIds: [],
 };
 
 const projectSlice = createSlice({
@@ -44,6 +45,8 @@ const projectSlice = createSlice({
     clearProjects: (state) => {
       state.projects = [];
       state.currentProject = null;
+      state.appliedProjectIds = [];
+      state.openProjects = [];
     },
     fetchOpenProjectsStart: (state) => {
       state.isLoadingOpen = true;
@@ -56,6 +59,13 @@ const projectSlice = createSlice({
     fetchOpenProjectsFailure: (state, action) => {
       state.isLoadingOpen = false;
       state.openError = action.payload;
+    },
+    applyForProject: (state, action) => {
+      const id = action.payload;
+      if (id && !state.appliedProjectIds.includes(id)) {
+        state.appliedProjectIds.push(id);
+        state.openProjects = state.openProjects.filter((p) => p.id !== id);
+      }
     },
   },
 });
@@ -72,6 +82,7 @@ export const {
   fetchOpenProjectsStart,
   fetchOpenProjectsSuccess,
   fetchOpenProjectsFailure,
+  applyForProject,
 } = projectSlice.actions;
 
 export default projectSlice.reducer;

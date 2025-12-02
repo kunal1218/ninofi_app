@@ -4,6 +4,7 @@ import { persistReducer, persistStore } from 'redux-persist';
 import authReducer from './authSlice';
 import invoiceReducer from './invoiceSlice';
 import projectReducer from './projectSlice';
+import notificationReducer from './notificationSlice';
 
 // Persist config for auth (so user stays logged in)
 const authPersistConfig = {
@@ -19,6 +20,7 @@ export const store = configureStore({
     auth: persistedAuthReducer,
     invoices: invoiceReducer,
     projects: projectReducer,
+    notifications: notificationReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

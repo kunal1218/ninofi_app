@@ -795,6 +795,20 @@ app.get('/api/notifications/:userId', async (req, res) => {
       `,
       [userId]
     );
+    // Clean notifications for withdrawn/denied applications
+    await pool.query(
+      `
+        DELETE FROM notifications n
+        WHERE n.user_id = $1
+          AND n.data->>'applicationId' IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM project_applications pa
+            WHERE pa.id::text = n.data->>'applicationId'
+              AND pa.status = 'pending'
+          )
+      `,
+      [userId]
+    );
     const result = await pool.query(
       'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC',
       [userId]

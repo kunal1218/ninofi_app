@@ -120,40 +120,39 @@ const CreateProjectScreen = ({ navigation, route }) => {
     }
   }, [existingProject]);
 
-  useEffect(() => {
-    (async () => {
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-    })();
-  }, []);
-
   const pickAttachment = async (index) => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permission.status !== 'granted') {
-      Alert.alert('Permission required', 'Please grant photo access to attach images.');
-      return;
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Permission required', 'Please grant photo access to attach images.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        base64: true,
+        quality: 0.7,
+      });
+
+      if (result.canceled) return;
+      const asset = result.assets?.[0];
+      if (!asset) return;
+
+      const dataUri = asset.base64 ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` : '';
+      setAttachments((prev) => {
+        const next = [...prev];
+        next[index] = {
+          ...next[index],
+          localUri: asset.uri || '',
+          dataUri: dataUri || '',
+          url: dataUri || asset.uri || next[index].url,
+        };
+        return next;
+      });
+    } catch (err) {
+      console.error('Image pick error', err);
+      Alert.alert('Error', 'Could not open photo library.');
     }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      base64: true,
-      quality: 0.7,
-    });
-
-    if (result.canceled) return;
-    const asset = result.assets?.[0];
-    if (!asset) return;
-
-    const dataUri = asset.base64 ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` : '';
-    setAttachments((prev) => {
-      const next = [...prev];
-      next[index] = {
-        ...next[index],
-        localUri: asset.uri || '',
-        dataUri: dataUri || '',
-        url: dataUri || asset.uri || next[index].url,
-      };
-      return next;
-    });
   };
 
   const handleSubmit = async () => {

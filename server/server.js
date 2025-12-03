@@ -877,15 +877,6 @@ app.post('/api/applications/:applicationId/:action', async (req, res) => {
     }
 
     if (appRow.status && appRow.status !== 'pending') {
-      logInfo('applications:decide:skip-nonpending', {
-        projectId,
-        contractorId,
-        currentStatus: appRow.status,
-      });
-      return res.status(409).json({ message: 'Application is no longer pending' });
-    }
-
-    if (appRow.status && appRow.status !== 'pending') {
       logInfo('applications:update:skip-nonpending', {
         applicationId,
         currentStatus: appRow.status,

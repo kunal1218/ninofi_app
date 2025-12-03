@@ -7,9 +7,13 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
+const asyncHandler = require('./utils/asyncHandler');
+const { ensureUuid } = require('./utils/validation');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+console.log('[server] Starting server...');
+console.log('[server] NODE_ENV =', process.env.NODE_ENV);
+const PORT = process.env.PORT || 8081;
 const SALT_ROUNDS = 10;
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const ENV_VARIABLES = [
@@ -40,6 +44,8 @@ const SERVER_START_TIME = Date.now();
 let requestCount = 0;
 let errorCount = 0;
 let totalResponseTimeMs = 0;
+// Basic UUID validator to guard DB queries from bad input
+const isUuid = (val) => typeof val === 'string' && /^[0-9a-fA-F-]{36}$/.test(val);
 
 // Structured logging helpers so we reliably see payloads in Railway/console
 const logInfo = (tag, payload) => {
@@ -82,6 +88,14 @@ app.use((req, res, next) => {
   next();
 });
 
+// Auto-wrap all route handlers in async error catcher
+const wrapAsync = (fn) =>
+  typeof fn === 'function' ? (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next) : fn;
+['get', 'post', 'put', 'delete', 'patch'].forEach((method) => {
+  const orig = app[method];
+  app[method] = (path, ...handlers) => orig.call(app, path, ...handlers.map(wrapAsync));
+});
+
 const normalizeRole = (role) => (role || 'unknown').toLowerCase();
 const normalizeFeatureName = (name = '') => name.trim().toLowerCase();
 const getUptimeSeconds = () => Math.round((Date.now() - SERVER_START_TIME) / 1000);
@@ -97,12 +111,19 @@ const buildSslConfig = () => {
 };
 
 const connectionString = process.env.DATABASE_URL;
-const pool = connectionString
-  ? new Pool({
+let pool = null;
+try {
+  if (connectionString) {
+    console.log('[server] Connecting to Postgres...');
+    pool = new Pool({
       connectionString,
       ssl: buildSslConfig(),
-    })
-  : null;
+    });
+    console.log('[server] Postgres connection initialized');
+  }
+} catch (err) {
+  console.error('[server] Fatal Postgres startup error:', err);
+}
 
 const DEFAULT_FEATURE_FLAGS = [
   {
@@ -1029,6 +1050,9 @@ app.post('/api/projects/:projectId/apply', async (req, res) => {
   try {
     const { projectId } = req.params;
     const { contractorId, message } = req.body || {};
+    if (!isUuid(projectId) || !isUuid(contractorId)) {
+      return res.status(400).json({ message: 'Invalid projectId or contractorId' });
+    }
     if (!projectId || !contractorId) {
       return res.status(400).json({ message: 'projectId and contractorId are required' });
     }
@@ -1125,6 +1149,9 @@ app.get('/api/notifications/:userId', async (req, res) => {
     if (!userId) {
       return res.status(400).json({ message: 'userId is required' });
     }
+    if (!isUuid(userId)) {
+      return res.status(400).json({ message: 'Invalid userId' });
+    }
     await assertDbReady();
     // Clean notifications for deleted projects
     await pool.query(
@@ -1171,6 +1198,9 @@ app.post('/api/applications/:applicationId/:action', async (req, res) => {
   try {
     const { applicationId, action } = req.params;
     const { ownerId } = req.body || {};
+    if (!isUuid(applicationId)) {
+      return res.status(400).json({ message: 'Invalid applicationId' });
+    }
     logInfo('applications:update:request', {
       path: req.originalUrl,
       method: req.method,
@@ -1272,6 +1302,9 @@ app.post('/api/applications/decide', async (req, res) => {
   const client = await pool.connect();
   try {
     const { projectId, contractorId, ownerId, action } = req.body || {};
+    if (!isUuid(projectId) || !isUuid(contractorId)) {
+      return res.status(400).json({ message: 'Invalid projectId or contractorId' });
+    }
     logInfo('applications:decide:request', {
       path: req.originalUrl,
       method: req.method,
@@ -1409,6 +1442,9 @@ app.get('/api/projects/contractor/:contractorId', async (req, res) => {
     if (!contractorId) {
       return res.status(400).json({ message: 'contractorId is required' });
     }
+    if (!isUuid(contractorId)) {
+      return res.status(400).json({ message: 'Invalid contractorId' });
+    }
     await assertDbReady();
     const result = await pool.query(
       `
@@ -1495,6 +1531,12 @@ app.delete('/api/applications/:applicationId', async (req, res) => {
     const { contractorId } = req.body || {};
     if (!applicationId) {
       return res.status(400).json({ message: 'applicationId is required' });
+    }
+    if (!isUuid(applicationId)) {
+      return res.status(400).json({ message: 'Invalid applicationId' });
+    }
+    if (contractorId && !isUuid(contractorId)) {
+      return res.status(400).json({ message: 'Invalid contractorId' });
     }
     await assertDbReady();
 
@@ -1833,6 +1875,9 @@ app.get('/api/projects/user/:userId', async (req, res) => {
     if (!userId) {
       return res.status(400).json({ message: 'userId is required' });
     }
+    if (!isUuid(userId)) {
+      return res.status(400).json({ message: 'Invalid userId' });
+    }
 
     await assertDbReady();
     const user = await getUserById(userId);
@@ -1920,6 +1965,9 @@ app.get('/api/projects/user/:userId', async (req, res) => {
 app.get('/api/projects/open', async (_req, res) => {
   try {
     const contractorId = _req.query.contractorId || null;
+    if (contractorId && !isUuid(contractorId)) {
+      return res.status(400).json({ message: 'Invalid contractorId' });
+    }
     await assertDbReady();
     const result = await pool.query(
       `
@@ -2835,12 +2883,37 @@ app.get('/api/users/:role', async (req, res) => {
   }
 });
 
+// Global error handler (after routes)
+app.use((err, req, res, next) => {
+  console.error('[UNHANDLED ROUTE ERROR]', {
+    message: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method,
+  });
+  const status = err.statusCode || err.status || 500;
+  const payload = {
+    error: status === 500 ? 'Internal server error' : err.message || 'Request failed',
+  };
+  if (!res.headersSent) {
+    res.status(status).json(payload);
+  }
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[process] UNHANDLED REJECTION:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[process] UNCAUGHT EXCEPTION:', err);
+});
+
 if (require.main === module) {
   (async () => {
     try {
       await dbReady;
       app.listen(PORT, () => {
-        console.log(`Server running on http://localhost:${PORT}`);
+        console.log(`Server running on port ${PORT}`);
       });
     } catch (error) {
       console.error('Server failed to start:', error);

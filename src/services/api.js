@@ -4,24 +4,22 @@ import axios from 'axios';
 let authToken = null;
 
 const resolveBaseUrl = () => {
-  // Preferred: explicit env var for Railway
+  // Preferred: explicit env var for Railway/production
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // Fallbacks for local dev via Expo tunnels/lan
-  const host =
-    Constants.expoConfig?.hostUri?.split(':')[0] ||
-    Constants.manifest?.debuggerHost?.split(':')[0];
-
-  if (host) {
-    return `http://${host}:3001/api`;
+  // Optional: expo config extra
+  if (Constants.expoConfig?.extra?.apiUrl) {
+    return Constants.expoConfig.extra.apiUrl;
   }
 
-  return 'http://localhost:3001/api';
+  // Default to deployed API to avoid hitting LAN/localhost on device
+  return 'https://ninofi-production.up.railway.app/api';
 };
 
 const API_BASE_URL = resolveBaseUrl();
+console.log('[api] base URL', API_BASE_URL);
 
 // Create axios instance
 const api = axios.create({
@@ -94,9 +92,29 @@ export const projectAPI = {
     api.delete(`/projects/${id}`, { data: userId ? { userId } : undefined }),
   applyToProject: async (projectId, payload) =>
     api.post(`/projects/${projectId}/apply`, payload),
-  decideApplication: async (applicationId, action, ownerId) =>
-    api.post(`/applications/${applicationId}/${action}`, ownerId ? { ownerId } : {}),
-  decideApplicationByProject: async (payload) => api.post('/applications/decide', payload),
+  decideApplication: async (applicationId, action, ownerId) => {
+    const url = `/applications/${applicationId}/${action}`;
+    console.log('[api] decideApplication ->', API_BASE_URL + url, { ownerId });
+    try {
+      const res = await api.post(url, ownerId ? { ownerId } : {});
+      console.log('[api] decideApplication success', res.status);
+      return res;
+    } catch (err) {
+      console.log('[api] decideApplication error', err?.response?.status, err?.message);
+      throw err;
+    }
+  },
+  decideApplicationByProject: async (payload) => {
+    console.log('[api] decideApplicationByProject ->', API_BASE_URL + '/applications/decide', payload);
+    try {
+      const res = await api.post('/applications/decide', payload);
+      console.log('[api] decideApplicationByProject success', res.status);
+      return res;
+    } catch (err) {
+      console.log('[api] decideApplicationByProject error', err?.response?.status, err?.message);
+      throw err;
+    }
+  },
   getApplicationsForContractor: async (contractorId) =>
     api.get(`/applications/contractor/${contractorId}`),
   deleteApplication: async (applicationId, contractorId) =>

@@ -35,6 +35,9 @@ const ENV_VARIABLES = [
   { key: 'RAILWAY_STATIC_URL', label: 'Railway static URL' },
 ];
 
+// Basic UUID validator to guard DB queries from bad input
+const isUuid = (val) => typeof val === 'string' && /^[0-9a-fA-F-]{36}$/.test(val);
+
 // Structured logging helpers so we reliably see payloads in Railway/console
 const logInfo = (tag, payload) => {
   try {
@@ -799,6 +802,9 @@ app.get('/api/notifications/:userId', async (req, res) => {
     if (!userId) {
       return res.status(400).json({ message: 'userId is required' });
     }
+    if (!isUuid(userId)) {
+      return res.status(400).json({ message: 'Invalid userId' });
+    }
     await assertDbReady();
     // Clean notifications for deleted projects
     await pool.query(
@@ -845,6 +851,9 @@ app.post('/api/applications/:applicationId/:action', async (req, res) => {
   try {
     const { applicationId, action } = req.params;
     const { ownerId } = req.body || {};
+    if (!isUuid(applicationId)) {
+      return res.status(400).json({ message: 'Invalid applicationId' });
+    }
     logInfo('applications:update:request', {
       path: req.originalUrl,
       method: req.method,
@@ -946,6 +955,9 @@ app.post('/api/applications/decide', async (req, res) => {
   const client = await pool.connect();
   try {
     const { projectId, contractorId, ownerId, action } = req.body || {};
+    if (!isUuid(projectId) || !isUuid(contractorId)) {
+      return res.status(400).json({ message: 'Invalid projectId or contractorId' });
+    }
     logInfo('applications:decide:request', {
       path: req.originalUrl,
       method: req.method,
@@ -1082,6 +1094,9 @@ app.get('/api/projects/contractor/:contractorId', async (req, res) => {
     const { contractorId } = req.params;
     if (!contractorId) {
       return res.status(400).json({ message: 'contractorId is required' });
+    }
+    if (!isUuid(contractorId)) {
+      return res.status(400).json({ message: 'Invalid contractorId' });
     }
     await assertDbReady();
     const result = await pool.query(
@@ -1506,6 +1521,9 @@ app.get('/api/projects/user/:userId', async (req, res) => {
     const { userId } = req.params;
     if (!userId) {
       return res.status(400).json({ message: 'userId is required' });
+    }
+    if (!isUuid(userId)) {
+      return res.status(400).json({ message: 'Invalid userId' });
     }
 
     await assertDbReady();

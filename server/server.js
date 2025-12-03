@@ -35,6 +35,23 @@ const ENV_VARIABLES = [
   { key: 'RAILWAY_STATIC_URL', label: 'Railway static URL' },
 ];
 
+// Structured logging helpers so we reliably see payloads in Railway/console
+const logInfo = (tag, payload) => {
+  try {
+    console.log(`[${tag}]`, JSON.stringify(payload));
+  } catch (e) {
+    console.log(`[${tag}]`, payload);
+  }
+};
+
+const logError = (tag, payload, error) => {
+  try {
+    console.error(`[${tag}]`, JSON.stringify(payload), error);
+  } catch (e) {
+    console.error(`[${tag}]`, payload, error);
+  }
+};
+
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
@@ -828,6 +845,13 @@ app.post('/api/applications/:applicationId/:action', async (req, res) => {
   try {
     const { applicationId, action } = req.params;
     const { ownerId } = req.body || {};
+    logInfo('applications:update:request', {
+      path: req.originalUrl,
+      method: req.method,
+      applicationId,
+      action,
+      ownerId: ownerId || null,
+    });
     if (!applicationId || !action) {
       return res.status(400).json({ message: 'applicationId and action are required' });
     }
@@ -858,7 +882,7 @@ app.post('/api/applications/:applicationId/:action', async (req, res) => {
     }
 
     await client.query('BEGIN');
-    console.log('[applications:update] start', {
+    logInfo('applications:update:start', {
       applicationId,
       action,
       ownerId: ownerId || null,
@@ -891,11 +915,11 @@ app.post('/api/applications/:applicationId/:action', async (req, res) => {
     );
 
     await client.query('COMMIT');
-    console.log('[applications:update] success', { applicationId, newStatus });
+    logInfo('applications:update:success', { applicationId, newStatus });
     return res.json({ status: newStatus });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
-    console.error('Error updating application:', { applicationId }, error);
+    logError('applications:update:error', { applicationId }, error);
     const message = pool
       ? 'Failed to update application'
       : 'Database is not configured (set DATABASE_URL)';
@@ -909,6 +933,14 @@ app.post('/api/applications/decide', async (req, res) => {
   const client = await pool.connect();
   try {
     const { projectId, contractorId, ownerId, action } = req.body || {};
+    logInfo('applications:decide:request', {
+      path: req.originalUrl,
+      method: req.method,
+      projectId,
+      contractorId,
+      ownerId: ownerId || null,
+      action,
+    });
     if (!projectId || !contractorId || !action) {
       return res
         .status(400)
@@ -940,7 +972,7 @@ app.post('/api/applications/decide', async (req, res) => {
     }
 
     await client.query('BEGIN');
-    console.log('[applications:decide] start', {
+    logInfo('applications:decide:start', {
       projectId,
       contractorId,
       ownerId: ownerId || null,
@@ -973,11 +1005,15 @@ app.post('/api/applications/decide', async (req, res) => {
     );
 
     await client.query('COMMIT');
-    console.log('[applications:decide] success', { projectId, contractorId, newStatus });
+    logInfo('applications:decide:success', { projectId, contractorId, newStatus });
     return res.json({ status: newStatus });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
-    console.error('Error updating application (by project/contractor):', { projectId: req.body?.projectId, contractorId: req.body?.contractorId }, error);
+    logError(
+      'applications:decide:error',
+      { projectId: req.body?.projectId, contractorId: req.body?.contractorId },
+      error
+    );
     const message = pool
       ? 'Failed to update application'
       : 'Database is not configured (set DATABASE_URL)';

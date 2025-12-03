@@ -36,6 +36,11 @@ const ENV_VARIABLES = [
   { key: 'RAILWAY_STATIC_URL', label: 'Railway static URL' },
 ];
 
+const SERVER_START_TIME = Date.now();
+let requestCount = 0;
+let errorCount = 0;
+let totalResponseTimeMs = 0;
+
 // Structured logging helpers so we reliably see payloads in Railway/console
 const logInfo = (tag, payload) => {
   try {
@@ -59,7 +64,27 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 app.use('/uploads', express.static(UPLOAD_DIR));
 
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+  requestCount += 1;
+  res.on('finish', () => {
+    const end = process.hrtime.bigint();
+    const durationMs = Number(end - start) / 1e6;
+    totalResponseTimeMs += durationMs;
+    if (res.statusCode >= 500) {
+      errorCount += 1;
+    }
+    const timestamp = new Date().toISOString();
+    console.log(
+      `[${timestamp}] ${req.method} ${req.originalUrl} - ${res.statusCode} (${durationMs.toFixed(2)} ms)`
+    );
+  });
+  next();
+});
+
 const normalizeRole = (role) => (role || 'unknown').toLowerCase();
+const normalizeFeatureName = (name = '') => name.trim().toLowerCase();
+const getUptimeSeconds = () => Math.round((Date.now() - SERVER_START_TIME) / 1000);
 
 const buildSslConfig = () => {
   const sslFlag = (process.env.PGSSLMODE || process.env.DATABASE_SSL || '').toLowerCase();
@@ -78,6 +103,54 @@ const pool = connectionString
       ssl: buildSslConfig(),
     })
   : null;
+
+const DEFAULT_FEATURE_FLAGS = [
+  {
+    featureName: 'expense_tracking',
+    enabled: true,
+    description: 'Allows contractors to log expenses for projects.',
+  },
+  {
+    featureName: 'payroll_tracking',
+    enabled: true,
+    description: 'Enables tracking of contractor work hours and payroll.',
+  },
+  {
+    featureName: 'digital_contracts',
+    enabled: true,
+    description: 'Allows homeowners and contractors to manage digital contracts.',
+  },
+  {
+    featureName: 'gps_checkin',
+    enabled: false,
+    description: 'Requires GPS check-ins at job sites.',
+  },
+  {
+    featureName: 'contractor_verification',
+    enabled: false,
+    description: 'Enforces contractor verification workflows.',
+  },
+  {
+    featureName: 'invoice_generation',
+    enabled: false,
+    description: 'Generates invoices automatically for projects.',
+  },
+];
+
+const ensureDefaultFeatureFlags = async () => {
+  if (!pool) return;
+  for (const flag of DEFAULT_FEATURE_FLAGS) {
+    const featureName = normalizeFeatureName(flag.featureName);
+    await pool.query(
+      `
+        INSERT INTO feature_flags (feature_name, enabled, description)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (feature_name) DO NOTHING
+      `,
+      [featureName, flag.enabled, flag.description]
+    );
+  }
+};
 
 const initDb = async () => {
   if (!pool) {
@@ -287,6 +360,19 @@ const initDb = async () => {
   await pool.query(
     'CREATE UNIQUE INDEX IF NOT EXISTS contract_signatures_unique ON contract_signatures (contract_id, user_id)'
   );
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS feature_flags (
+      id SERIAL PRIMARY KEY,
+      feature_name TEXT UNIQUE NOT NULL,
+      enabled BOOLEAN NOT NULL DEFAULT false,
+      description TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_by UUID
+    )
+  `);
+
+  await ensureDefaultFeatureFlags();
 };
 
 const dbReady = (async () => {
@@ -449,6 +535,14 @@ const mapNotificationRow = (row = {}) => ({
   data: row.data || {},
   read: !!row.read,
   createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+});
+
+const mapFeatureFlagRow = (row = {}) => ({
+  featureName: row.feature_name,
+  enabled: !!row.enabled,
+  description: row.description || '',
+  updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+  updatedBy: row.updated_by || null,
 });
 
 const getProjectById = async (projectId) => {
@@ -2503,6 +2597,174 @@ app.get('/api/contracts/:contractId/signatures', async (req, res) => {
       ? 'Failed to fetch signatures'
       : 'Database is not configured (set DATABASE_URL)';
     return res.status(500).json({ message });
+  }
+});
+
+app.get('/api/feature-flags', async (_req, res) => {
+  try {
+    await assertDbReady();
+    const result = await pool.query('SELECT feature_name, enabled FROM feature_flags ORDER BY feature_name ASC');
+    return res.json(result.rows.map((row) => ({ featureName: row.feature_name, enabled: !!row.enabled })));
+  } catch (error) {
+    logError('feature-flags:list:error', {}, error);
+    const message = pool
+      ? 'Failed to fetch feature flags'
+      : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  }
+});
+
+app.get('/api/feature-flags/:featureName', async (req, res) => {
+  try {
+    const featureName = normalizeFeatureName(req.params?.featureName);
+    if (!featureName) {
+      return res.status(400).json({ message: 'featureName is required' });
+    }
+    await assertDbReady();
+    const result = await pool.query('SELECT feature_name, enabled FROM feature_flags WHERE feature_name = $1', [featureName]);
+    if (!result.rows.length) {
+      return res.status(404).json({ message: 'Feature flag not found' });
+    }
+    const row = result.rows[0];
+    return res.json({ featureName: row.feature_name, enabled: !!row.enabled });
+  } catch (error) {
+    logError('feature-flags:get:error', { featureName: req.params?.featureName }, error);
+    const message = pool
+      ? 'Failed to fetch feature flag'
+      : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  }
+});
+
+app.post('/api/feature-flags', async (req, res) => {
+  try {
+    const { featureName, enabled = false, description = '', updatedBy } = req.body || {};
+    const normalizedName = normalizeFeatureName(featureName);
+    if (!normalizedName) {
+      return res.status(400).json({ message: 'featureName is required' });
+    }
+
+    await assertDbReady();
+    const result = await pool.query(
+      `
+        INSERT INTO feature_flags (feature_name, enabled, description, updated_by, updated_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (feature_name)
+        DO UPDATE SET
+          enabled = EXCLUDED.enabled,
+          description = EXCLUDED.description,
+          updated_by = EXCLUDED.updated_by,
+          updated_at = NOW()
+        RETURNING *
+      `,
+      [normalizedName, !!enabled, description, updatedBy || null]
+    );
+
+    return res.status(201).json(mapFeatureFlagRow(result.rows[0]));
+  } catch (error) {
+    logError('feature-flags:create:error', { body: req.body }, error);
+    const message = pool
+      ? 'Failed to create feature flag'
+      : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  }
+});
+
+app.put('/api/feature-flags/:featureName', async (req, res) => {
+  try {
+    const featureName = normalizeFeatureName(req.params?.featureName);
+    if (!featureName) {
+      return res.status(400).json({ message: 'featureName is required' });
+    }
+
+    const { enabled, description, updatedBy } = req.body || {};
+    if (enabled === undefined) {
+      return res.status(400).json({ message: 'enabled value is required' });
+    }
+
+    await assertDbReady();
+    const result = await pool.query(
+      `
+        UPDATE feature_flags
+        SET enabled = $1,
+            description = COALESCE($2, description),
+            updated_by = $3,
+            updated_at = NOW()
+        WHERE feature_name = $4
+        RETURNING *
+      `,
+      [!!enabled, description ?? null, updatedBy || null, featureName]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ message: 'Feature flag not found' });
+    }
+
+    return res.json(mapFeatureFlagRow(result.rows[0]));
+  } catch (error) {
+    logError('feature-flags:update:error', { featureName: req.params?.featureName }, error);
+    const message = pool
+      ? 'Failed to update feature flag'
+      : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  }
+});
+
+app.get('/api/monitoring/health', async (_req, res) => {
+  try {
+    const uptimeSeconds = getUptimeSeconds();
+    const memoryUsage = process.memoryUsage();
+    let dbStatus = pool ? 'configured' : 'missing pool';
+    let dbLatencyMs = null;
+    if (pool) {
+      const start = Date.now();
+      try {
+        await pool.query('SELECT 1');
+        dbStatus = 'ok';
+        dbLatencyMs = Date.now() - start;
+      } catch (error) {
+        dbStatus = 'error';
+        dbLatencyMs = null;
+        logError('monitoring:health:db', {}, error);
+      }
+    }
+
+    return res.json({
+      status: dbStatus === 'ok' ? 'ok' : 'degraded',
+      uptimeSeconds,
+      nodeVersion: process.version,
+      memoryMB: Number((memoryUsage.rss / 1024 / 1024).toFixed(2)),
+      requestCount,
+      errorCount,
+      averageResponseTimeMs:
+        requestCount > 0 ? Number((totalResponseTimeMs / requestCount).toFixed(2)) : 0,
+      db: {
+        status: dbStatus,
+        latencyMs: dbLatencyMs,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logError('monitoring:health:error', {}, error);
+    return res.status(500).json({ status: 'error', message: 'Failed to gather health info' });
+  }
+});
+
+app.get('/api/monitoring/stats', (_req, res) => {
+  try {
+    const memoryUsage = process.memoryUsage();
+    const averageResponseTimeMs =
+      requestCount > 0 ? totalResponseTimeMs / requestCount : 0;
+    return res.json({
+      requestCount,
+      errorCount,
+      uptimeSeconds: getUptimeSeconds(),
+      memoryMB: Number((memoryUsage.rss / 1024 / 1024).toFixed(2)),
+      averageResponseTimeMs: Number(averageResponseTimeMs.toFixed(2)),
+    });
+  } catch (error) {
+    logError('monitoring:stats:error', {}, error);
+    return res.status(500).json({ message: 'Failed to fetch stats' });
   }
 });
 

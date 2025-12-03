@@ -31,7 +31,16 @@ const NotificationDetailScreen = ({ route, navigation }) => {
     if (!hasProjectAndContractor && !hasAppId) return;
     setIsSubmitting(true);
     try {
-      if (hasProjectAndContractor) {
+      // Prefer the applicationId route when present to avoid stale project/contractor combos.
+      if (hasAppId) {
+        const payload = {
+          applicationId: data.applicationId,
+          action,
+          ownerId: user?.id,
+        };
+        console.log('[decideApplication] payload', payload);
+        await decideApplication(data.applicationId, action, user?.id);
+      } else if (hasProjectAndContractor) {
         const payload = {
           projectId: data.projectId,
           contractorId: data.contractorId,
@@ -40,13 +49,6 @@ const NotificationDetailScreen = ({ route, navigation }) => {
         };
         console.log('[decideApplicationByProject] payload', payload);
         await decideApplicationByProject(payload);
-      } else if (hasAppId) {
-        console.log('[decideApplication] payload', {
-          applicationId: data.applicationId,
-          action,
-          ownerId: user?.id,
-        });
-        await decideApplication(data.applicationId, action, user?.id);
       }
       Alert.alert(
         'Updated',
@@ -60,7 +62,7 @@ const NotificationDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  const canDecide = Boolean(data.projectId && data.contractorId) || Boolean(data.applicationId);
+  const canDecide = Boolean(data.applicationId) || Boolean(data.projectId && data.contractorId);
 
   return (
     <SafeAreaView style={styles.container}>

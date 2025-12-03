@@ -95,11 +95,25 @@ export const projectAPI = {
   decideApplication: async (applicationId, action, ownerId) => {
     const url = `/applications/${applicationId}/${action}`;
     console.log('[api] decideApplication ->', API_BASE_URL + url, { ownerId });
-    return api.post(url, ownerId ? { ownerId } : {});
+    try {
+      const res = await api.post(url, ownerId ? { ownerId } : {});
+      console.log('[api] decideApplication success', res.status);
+      return res;
+    } catch (err) {
+      console.log('[api] decideApplication error', err?.response?.status, err?.message);
+      throw err;
+    }
   },
   decideApplicationByProject: async (payload) => {
     console.log('[api] decideApplicationByProject ->', API_BASE_URL + '/applications/decide', payload);
-    return api.post('/applications/decide', payload);
+    try {
+      const res = await api.post('/applications/decide', payload);
+      console.log('[api] decideApplicationByProject success', res.status);
+      return res;
+    } catch (err) {
+      console.log('[api] decideApplicationByProject error', err?.response?.status, err?.message);
+      throw err;
+    }
   },
   getApplicationsForContractor: async (contractorId) =>
     api.get(`/applications/contractor/${contractorId}`),

@@ -6,9 +6,13 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
+const asyncHandler = require('./utils/asyncHandler');
+const { ensureUuid } = require('./utils/validation');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+console.log('[server] Starting server...');
+console.log('[server] NODE_ENV =', process.env.NODE_ENV);
+const PORT = process.env.PORT || 8081;
 const SALT_ROUNDS = 10;
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const ENV_VARIABLES = [
@@ -61,6 +65,14 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 app.use('/uploads', express.static(UPLOAD_DIR));
 
+// Auto-wrap all route handlers in async error catcher
+const wrapAsync = (fn) =>
+  typeof fn === 'function' ? (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next) : fn;
+['get', 'post', 'put', 'delete', 'patch'].forEach((method) => {
+  const orig = app[method];
+  app[method] = (path, ...handlers) => orig.call(app, path, ...handlers.map(wrapAsync));
+});
+
 const normalizeRole = (role) => (role || 'unknown').toLowerCase();
 
 const buildSslConfig = () => {
@@ -74,12 +86,19 @@ const buildSslConfig = () => {
 };
 
 const connectionString = process.env.DATABASE_URL;
-const pool = connectionString
-  ? new Pool({
+let pool = null;
+try {
+  if (connectionString) {
+    console.log('[server] Connecting to Postgres...');
+    pool = new Pool({
       connectionString,
       ssl: buildSslConfig(),
-    })
-  : null;
+    });
+    console.log('[server] Postgres connection initialized');
+  }
+} catch (err) {
+  console.error('[server] Fatal Postgres startup error:', err);
+}
 
 const initDb = async () => {
   if (!pool) {
@@ -1773,12 +1792,37 @@ app.get('/api/users/:role', async (req, res) => {
   }
 });
 
+// Global error handler (after routes)
+app.use((err, req, res, next) => {
+  console.error('[UNHANDLED ROUTE ERROR]', {
+    message: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method,
+  });
+  const status = err.statusCode || err.status || 500;
+  const payload = {
+    error: status === 500 ? 'Internal server error' : err.message || 'Request failed',
+  };
+  if (!res.headersSent) {
+    res.status(status).json(payload);
+  }
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[process] UNHANDLED REJECTION:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[process] UNCAUGHT EXCEPTION:', err);
+});
+
 if (require.main === module) {
   (async () => {
     try {
       await dbReady;
       app.listen(PORT, () => {
-        console.log(`Server running on http://localhost:${PORT}`);
+        console.log(`Server running on port ${PORT}`);
       });
     } catch (error) {
       console.error('Server failed to start:', error);

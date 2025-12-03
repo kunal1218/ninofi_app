@@ -92,9 +92,15 @@ export const projectAPI = {
     api.delete(`/projects/${id}`, { data: userId ? { userId } : undefined }),
   applyToProject: async (projectId, payload) =>
     api.post(`/projects/${projectId}/apply`, payload),
-  decideApplication: async (applicationId, action, ownerId) =>
-    api.post(`/applications/${applicationId}/${action}`, ownerId ? { ownerId } : {}),
-  decideApplicationByProject: async (payload) => api.post('/applications/decide', payload),
+  decideApplication: async (applicationId, action, ownerId) => {
+    const url = `/applications/${applicationId}/${action}`;
+    console.log('[api] decideApplication ->', API_BASE_URL + url, { ownerId });
+    return api.post(url, ownerId ? { ownerId } : {});
+  },
+  decideApplicationByProject: async (payload) => {
+    console.log('[api] decideApplicationByProject ->', API_BASE_URL + '/applications/decide', payload);
+    return api.post('/applications/decide', payload);
+  },
   getApplicationsForContractor: async (contractorId) =>
     api.get(`/applications/contractor/${contractorId}`),
   deleteApplication: async (applicationId, contractorId) =>

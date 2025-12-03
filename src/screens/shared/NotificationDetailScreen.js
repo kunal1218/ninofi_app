@@ -32,13 +32,20 @@ const NotificationDetailScreen = ({ route, navigation }) => {
     setIsSubmitting(true);
     try {
       if (hasProjectAndContractor) {
-        await decideApplicationByProject({
+        const payload = {
           projectId: data.projectId,
           contractorId: data.contractorId,
           ownerId: user?.id,
           action,
-        });
+        };
+        console.log('[decideApplicationByProject] payload', payload);
+        await decideApplicationByProject(payload);
       } else if (hasAppId) {
+        console.log('[decideApplication] payload', {
+          applicationId: data.applicationId,
+          action,
+          ownerId: user?.id,
+        });
         await decideApplication(data.applicationId, action, user?.id);
       }
       Alert.alert(

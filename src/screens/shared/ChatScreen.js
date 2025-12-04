@@ -161,7 +161,7 @@ const ChatScreen = ({ route, navigation }) => {
             style={[
               styles.bodyText,
               isOwn ? styles.bodyOwnText : null,
-              item.isDeleted ? styles.deletedText : null,
+              item.isDeleted ? (isOwn ? styles.deletedOwnText : styles.deletedText) : null,
             ]}
           >
             {item.isDeleted ? 'Message deleted' : item.body}
@@ -290,6 +290,7 @@ const styles = StyleSheet.create({
   bodyText: { color: palette.text },
   bodyOwnText: { color: '#fff' },
   deletedText: { color: palette.muted, fontStyle: 'italic' },
+  deletedOwnText: { color: '#fff', fontStyle: 'italic' },
   metaText: { color: palette.muted, fontSize: 11, marginTop: 6 },
   metaOwnText: { color: '#E7E8FF' },
   emptyState: { padding: 20, alignItems: 'center', justifyContent: 'center' },

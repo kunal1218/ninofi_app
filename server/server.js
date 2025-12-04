@@ -1837,6 +1837,11 @@ app.post('/api/projects/:projectId/leave', async (req, res) => {
       'withdrawn',
       appRow.id,
     ]);
+    // Remove contractor-invited personnel (retain owner only)
+    await client.query('DELETE FROM project_personnel WHERE project_id = $1 AND user_id <> $2', [
+      projectId,
+      appRow.owner_id,
+    ]);
 
     const notificationId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
     await client.query(
@@ -3200,6 +3205,9 @@ app.delete('/api/projects/:projectId/personnel/:personId', async (req, res) => {
     const participants = await getProjectParticipants(projectId);
     if (!participants) {
       return res.status(404).json({ message: 'Project not found' });
+    }
+    if (participants.ownerId === personId) {
+      return res.status(403).json({ message: 'Cannot remove the project owner' });
     }
     if (participants.contractorId !== userId) {
       return res.status(403).json({ message: 'Only the assigned contractor can remove personnel' });

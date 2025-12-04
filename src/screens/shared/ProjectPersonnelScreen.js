@@ -64,7 +64,7 @@ const ProjectPersonnelScreen = ({ route, navigation }) => {
   const [people, setPeople] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const isContractor = role === 'contractor';
+  const isContractor = user?.role === 'contractor';
 
   const toggleSelect = (id) => setSelectedId((prev) => (prev === id ? null : id));
 

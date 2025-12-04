@@ -1,4 +1,4 @@
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
 import {
   Alert,
@@ -54,16 +54,7 @@ const ProfileScreen = ({ navigation: propNavigation }) => {
           style: 'destructive',
           onPress: async () => {
             await dispatch(logout());
-            const rootNav =
-              navigation.getParent?.()?.getParent?.() ||
-              navigation.getParent?.() ||
-              navigation;
-            rootNav.dispatch(
-              CommonActions.reset({
-                index: 0,
-                routes: [{ name: 'Welcome' }],
-              })
-            );
+            // Navigation container will re-render to the auth stack (Welcome) via Redux state.
           }
         }
       ]

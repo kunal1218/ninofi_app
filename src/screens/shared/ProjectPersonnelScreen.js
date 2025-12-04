@@ -1,9 +1,27 @@
 import React, { useMemo, useState } from 'react';
-import { Image, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import palette from '../../styles/palette';
 
 const buildPersonnel = (project) => {
   const people = [];
+  if (project?.owner) {
+    people.push({
+      id: project.owner.id,
+      name: project.owner.fullName,
+      role: 'owner',
+      email: project.owner.email,
+      phone: project.owner.phone,
+      photo: project.owner.profilePhotoUrl,
+    });
+  }
   if (project?.assignedContractor) {
     people.push({
       id: project.assignedContractor.id,
@@ -14,39 +32,8 @@ const buildPersonnel = (project) => {
       photo: project.assignedContractor.profilePhotoUrl,
     });
   }
-  // Simple placeholders to show hierarchy if data is missing
-  people.push(
-    {
-      id: 'sub-1',
-      name: 'Subcontractor Crew',
-      role: 'subcontractor',
-      email: 'subs@example.com',
-      phone: '555-202-1000',
-    },
-    {
-      id: 'foreman-1',
-      name: 'Site Foreman',
-      role: 'foreman',
-      email: 'foreman@example.com',
-      phone: '555-202-2000',
-    },
-    {
-      id: 'labor-1',
-      name: 'Laborer A',
-      role: 'laborer',
-      email: 'laborer@example.com',
-      phone: '555-202-3000',
-    },
-    {
-      id: 'labor-2',
-      name: 'Laborer B',
-      role: 'laborer',
-      email: 'laborer@example.com',
-      phone: '555-202-3001',
-    }
-  );
 
-  const order = ['contractor', 'subcontractor', 'foreman', 'laborer'];
+  const order = ['owner', 'contractor', 'subcontractor', 'foreman', 'laborer'];
   return people.sort(
     (a, b) => order.indexOf(a.role || 'laborer') - order.indexOf(b.role || 'laborer')
   );
@@ -54,6 +41,8 @@ const buildPersonnel = (project) => {
 
 const roleLabel = (role) => {
   switch ((role || '').toLowerCase()) {
+    case 'owner':
+      return 'Homeowner';
     case 'contractor':
       return 'General Contractor';
     case 'subcontractor':
@@ -66,10 +55,34 @@ const roleLabel = (role) => {
 };
 
 const ProjectPersonnelScreen = ({ route, navigation }) => {
-  const { project } = route.params || {};
-  const personnel = useMemo(() => buildPersonnel(project), [project]);
+  const { project, role = 'homeowner' } = route.params || {};
+  const basePeople = useMemo(() => buildPersonnel(project), [project]);
+  const [people, setPeople] = useState(basePeople);
   const [selectedId, setSelectedId] = useState(null);
+  const isContractor = role === 'contractor';
+
+  const availableEmployees = useMemo(
+    () => [
+      { id: 'emp-1', name: 'Taylor Foreman', role: 'foreman', email: 'taylor@example.com', phone: '555-333-1000' },
+      { id: 'emp-2', name: 'Jordan Mason', role: 'laborer', email: 'jordan@example.com', phone: '555-333-2000' },
+      { id: 'emp-3', name: 'Riley Sparks', role: 'laborer', email: 'riley@example.com', phone: '555-333-3000' },
+    ],
+    []
+  );
+
   const toggleSelect = (id) => setSelectedId((prev) => (prev === id ? null : id));
+
+  const handleAdd = (employee) => {
+    if (!employee) return;
+    if (people.find((p) => p.id === employee.id)) return;
+    const next = [...people, employee];
+    const order = ['owner', 'contractor', 'subcontractor', 'foreman', 'laborer'];
+    setPeople(
+      next.sort(
+        (a, b) => order.indexOf(a.role || 'laborer') - order.indexOf(b.role || 'laborer')
+      )
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -84,7 +97,7 @@ const ProjectPersonnelScreen = ({ route, navigation }) => {
           </View>
         </View>
 
-        {personnel.map((person) => {
+        {people.map((person) => {
           const isSelected = selectedId === person.id;
           return (
             <TouchableOpacity
@@ -122,6 +135,24 @@ const ProjectPersonnelScreen = ({ route, navigation }) => {
             </TouchableOpacity>
           );
         })}
+
+        {isContractor ? (
+          <View style={styles.addSection}>
+            <Text style={styles.addTitle}>Add Personnel</Text>
+            <View style={styles.employeeList}>
+              {availableEmployees.map((emp) => (
+                <TouchableOpacity
+                  key={emp.id}
+                  style={styles.employeeChip}
+                  onPress={() => handleAdd(emp)}
+                >
+                  <Text style={styles.employeeChipText}>{emp.name}</Text>
+                  <Text style={styles.employeeRole}>{roleLabel(emp.role)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -166,6 +197,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   messageText: { color: '#fff', fontWeight: '700' },
+  addSection: {
+    marginTop: 12,
+    padding: 14,
+    backgroundColor: palette.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.border,
+    gap: 10,
+  },
+  addTitle: { fontWeight: '700', color: palette.text },
+  employeeList: { gap: 8 },
+  employeeChip: {
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#F5F5FF',
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  employeeChipText: { fontWeight: '700', color: palette.text },
+  employeeRole: { color: palette.muted, fontSize: 12 },
 });
 
 export default ProjectPersonnelScreen;

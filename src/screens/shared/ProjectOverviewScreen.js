@@ -1,5 +1,5 @@
 import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import palette from '../../styles/palette';
 
 const ProjectOverviewScreen = ({ route, navigation }) => {
@@ -24,14 +24,19 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
   const handleEdit = () => {
     if (role === 'homeowner') {
       navigation.navigate('CreateProject', { project, origin: 'Dashboard' });
-    } else {
-      navigation.navigate('ContractorProjectDetails', { project, canApply: false, canLeave: true });
     }
   };
 
   const goPersonnel = () => {
     navigation.navigate('ProjectPersonnel', { project, role });
   };
+
+  const handleProposeContract = () => {
+    Alert.alert('Propose Contract', 'Contract proposal flow coming soon.');
+  };
+
+  const isContractor = role === 'contractor';
+  const showEdit = role === 'homeowner';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -44,6 +49,25 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Description</Text>
           <Text style={styles.body}>{project.description || 'No description provided.'}</Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Details</Text>
+          <Text style={styles.detailText}>Address: {project.address || 'Not set'}</Text>
+          <Text style={styles.detailText}>
+            Budget: ${Number(project.estimatedBudget || 0).toLocaleString()}
+          </Text>
+          <Text style={styles.detailText}>Timeline: {project.timeline || 'Not set'}</Text>
+          {project.owner?.fullName ? (
+            <Text style={styles.detailText}>Owner: {project.owner.fullName}</Text>
+          ) : null}
+          {project.assignedContractor?.fullName ? (
+            <Text style={styles.detailText}>
+              Contractor: {project.assignedContractor.fullName}
+            </Text>
+          ) : (
+            <Text style={styles.detailText}>Contractor: Unassigned</Text>
+          )}
         </View>
 
         <View style={styles.card}>
@@ -72,12 +96,31 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
         </View>
 
         <View style={styles.buttonRow}>
-          <TouchableOpacity style={[styles.button, styles.editButton]} onPress={handleEdit}>
-            <Text style={styles.buttonText}>Edit</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={[styles.button, styles.personnelButton]} onPress={goPersonnel}>
-            <Text style={styles.personnelText}>Personnel</Text>
+            <Text style={styles.personnelText}>People</Text>
           </TouchableOpacity>
+          {showEdit ? (
+            <TouchableOpacity style={[styles.button, styles.editButton]} onPress={handleEdit}>
+              <Text style={styles.buttonText}>Edit</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.button, styles.contractButton]}
+            onPress={handleProposeContract}
+          >
+            <Text style={styles.contractText}>Propose Contract</Text>
+          </TouchableOpacity>
+          {isContractor ? (
+            <TouchableOpacity
+              style={[styles.button, styles.addButton]}
+              onPress={() => navigation.navigate('ProjectPersonnel', { project, role })}
+            >
+              <Text style={styles.personnelText}>Add Personnel</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -101,6 +144,7 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: palette.text },
   body: { color: palette.text, lineHeight: 20 },
+  detailText: { color: palette.text, lineHeight: 20 },
   progressBar: {
     height: 8,
     backgroundColor: '#EEE7FF',
@@ -130,6 +174,9 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontWeight: '700' },
   personnelText: { color: palette.text, fontWeight: '700' },
   muted: { color: palette.muted },
+  contractButton: { backgroundColor: palette.primary },
+  addButton: { backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border },
+  contractText: { color: '#fff', fontWeight: '700' },
 });
 
 export default ProjectOverviewScreen;

@@ -34,6 +34,7 @@ import ApplicationsScreen from '../screens/contractor/ApplicationsScreen';
 import ChatScreen from '../screens/shared/ChatScreen';
 import ProjectOverviewScreen from '../screens/shared/ProjectOverviewScreen';
 import ProjectPersonnelScreen from '../screens/shared/ProjectPersonnelScreen';
+import RegisterWorkerScreen from '../screens/contractor/RegisterWorkerScreen';
 import { setAuthToken } from '../services/api';
 
 const RootStack = createStackNavigator();
@@ -120,6 +121,11 @@ const MainAppStack = () => (
         name="ProjectPersonnel"
         component={ProjectPersonnelScreen}
         options={{ title: 'Personnel' }}
+      />
+      <MainStack.Screen
+        name="RegisterWorker"
+        component={RegisterWorkerScreen}
+        options={{ title: 'Register Worker' }}
       />
       <MainStack.Screen
         name="Applications"

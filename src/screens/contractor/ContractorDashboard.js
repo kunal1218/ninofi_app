@@ -153,6 +153,14 @@ const ContractorDashboard = ({ navigation }) => {
               <Text style={styles.actionTitle}>My Profile</Text>
               <Text style={styles.actionText}>Licenses & docs</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionCard, shadowCard]}
+              onPress={() => navigation.navigate('RegisterWorker')}
+            >
+              <Text style={styles.actionIcon}>➕</Text>
+              <Text style={styles.actionTitle}>Register Worker</Text>
+              <Text style={styles.actionText}>Add employees to your team</Text>
+            </TouchableOpacity>
           </View>
         </View>
 

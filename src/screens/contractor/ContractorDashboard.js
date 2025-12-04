@@ -169,23 +169,19 @@ const ContractorDashboard = ({ navigation }) => {
           {!isLoadingContractor && (!contractorProjects || contractorProjects.length === 0) && (
             <Text style={styles.muted}>No active projects yet.</Text>
           )}
-          {!isLoadingContractor &&
-            contractorProjects?.map((project) => (
-              <TouchableOpacity
-                key={project.id}
-                style={styles.projectCard}
-                onPress={() =>
-                  navigation.navigate('ContractorProjectDetails', {
-                    project,
-                    canApply: false,
-                    canLeave: true,
-                  })
-                }
-              >
-                <View style={styles.projectHeader}>
-                  <Text style={styles.projectTitle}>{project.title}</Text>
-                  <Text style={styles.projectStatus}>{project.projectType || 'Project'}</Text>
-                </View>
+            {!isLoadingContractor &&
+              contractorProjects?.map((project) => (
+                <TouchableOpacity
+                  key={project.id}
+                  style={styles.projectCard}
+                  onPress={() =>
+                    navigation.navigate('ProjectOverview', { project, role: 'contractor' })
+                  }
+                >
+                  <View style={styles.projectHeader}>
+                    <Text style={styles.projectTitle}>{project.title}</Text>
+                    <Text style={styles.projectStatus}>{project.projectType || 'Project'}</Text>
+                  </View>
                 <Text style={styles.projectClient}>{project.address || 'No address provided'}</Text>
                 <Text style={styles.milestoneLabel}>
                   Milestones: {project.milestones?.length || 0}

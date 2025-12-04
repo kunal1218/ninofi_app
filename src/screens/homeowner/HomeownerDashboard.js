@@ -139,24 +139,16 @@ const HomeownerDashboard = ({ navigation }) => {
             <TouchableOpacity 
               key={project.id}
               style={styles.projectCard}
-              onPress={() => navigation.navigate('CreateProject', { project, origin: 'Dashboard' })}
+              onPress={() =>
+                navigation.navigate('ProjectOverview', { project, role: 'homeowner' })
+              }
             >
               <View style={styles.projectHeader}>
                 <Text style={styles.projectTitle}>{project.title}</Text>
                 <Text style={styles.projectStatus}>{project.projectType || 'Project'}</Text>
               </View>
               
-              <Text style={styles.projectContractor}>
-                {project.address || 'No address provided'}
-              </Text>
-              {project.assignedContractor?.fullName ? (
-                <Text style={styles.assigned}>
-                  {project.assignedContractor.fullName} is working on this project.
-                </Text>
-              ) : (
-                <Text style={styles.assignedPending}>Looking for a contractor</Text>
-              )}
-              
+             
               <View style={styles.progressContainer}>
                 <Text style={styles.progressLabel}>Progress</Text>
                 <Text style={styles.progressValue}>{progress}%</Text>
@@ -174,7 +166,6 @@ const HomeownerDashboard = ({ navigation }) => {
                 <Text style={styles.budget}>
                   Budget: ${Number(project.estimatedBudget || 0).toLocaleString()}
                 </Text>
-                <Text style={styles.viewDetails}>Edit →</Text>
               </View>
             </TouchableOpacity>
           );

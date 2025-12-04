@@ -30,7 +30,7 @@ const formatTimestamp = (value) => {
 };
 
 const ChatScreen = ({ route, navigation }) => {
-  const { project: initialProject } = route.params || {};
+  const { project: initialProject, receiver: initialReceiver } = route.params || {};
   const { user } = useSelector((state) => state.auth);
   const [project, setProject] = useState(initialProject || null);
   const projectId = project?.id || initialProject?.id;
@@ -70,7 +70,9 @@ const ChatScreen = ({ route, navigation }) => {
       : project?.assignedContractor?.id === user?.id
       ? project?.owner
       : null;
-  const canSend = Boolean(projectId && user?.id && counterpart?.id && isParticipant);
+  const activeReceiver = initialReceiver?.id ? initialReceiver : counterpart;
+  const isConversationScoped = Boolean(initialReceiver?.id);
+  const canSend = Boolean(projectId && user?.id && activeReceiver?.id && isParticipant);
 
   const loadMessages = useCallback(async () => {
     if (!projectId || !user?.id || !isParticipant) return;
@@ -101,7 +103,7 @@ const ChatScreen = ({ route, navigation }) => {
         await messageAPI.update(projectId, editingMessage.id, { userId: user.id, body });
         setEditingMessage(null);
       } else {
-        await messageAPI.send(projectId, { senderId: user.id, receiverId: counterpart.id, body });
+        await messageAPI.send(projectId, { senderId: user.id, receiverId: activeReceiver.id, body });
       }
       setInput('');
       await loadMessages();
@@ -170,6 +172,15 @@ const ChatScreen = ({ route, navigation }) => {
     );
   };
 
+  const filteredMessages =
+    isConversationScoped && activeReceiver?.id
+      ? messages.filter(
+          (m) =>
+            (m.senderId === user?.id && m.receiverId === activeReceiver.id) ||
+            (m.senderId === activeReceiver.id && m.receiverId === user?.id)
+        )
+      : messages;
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -184,8 +195,8 @@ const ChatScreen = ({ route, navigation }) => {
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>{project?.title || 'Project Chat'}</Text>
             <Text style={styles.headerSubtitle}>
-              {counterpart?.fullName
-                ? `Chat with ${counterpart.fullName}`
+              {activeReceiver?.fullName
+                ? `Chat with ${activeReceiver.fullName}`
                 : 'Chat unlocks once the match is confirmed'}
             </Text>
           </View>
@@ -203,7 +214,7 @@ const ChatScreen = ({ route, navigation }) => {
         ) : (
           <FlatList
             ref={listRef}
-            data={messages}
+            data={filteredMessages}
             keyExtractor={(item) => item.id}
             renderItem={renderMessage}
             contentContainerStyle={styles.listContent}

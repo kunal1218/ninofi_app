@@ -165,7 +165,17 @@ const ProjectPersonnelScreen = ({ route, navigation }) => {
                   <Text style={styles.detailText}>Phone: {person.phone || 'N/A'}</Text>
                   <TouchableOpacity
                     style={styles.messageButton}
-                    onPress={() => navigation.navigate('Chat', { project })}
+                    onPress={() =>
+                      navigation.navigate('Chat', {
+                        project,
+                        receiver: {
+                          id: person.id,
+                          fullName: person.name,
+                          email: person.email,
+                          role: person.role,
+                        },
+                      })
+                    }
                   >
                     <Text style={styles.messageText}>Message</Text>
                   </TouchableOpacity>

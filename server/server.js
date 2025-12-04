@@ -2962,6 +2962,11 @@ app.get('/api/projects/:projectId/messages', async (req, res) => {
         return res.status(400).json({ message: 'No conversation partner available for this project' });
       }
 
+      const [sender, receiverUser, project] = await Promise.all([
+        getUserById(senderId),
+        getUserById(resolvedReceiver),
+        getProjectById(projectId),
+      ]);
       const messageId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
       const insertResult = await pool.query(
         `
@@ -2973,6 +2978,33 @@ app.get('/api/projects/:projectId/messages', async (req, res) => {
       );
 
       const hydrated = await fetchMessageWithUsers(insertResult.rows[0].id);
+      // Notify receiver about the new message
+      if (receiverUser) {
+        const notificationId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+        const notifData = {
+          type: 'message',
+          projectId,
+          projectTitle: project?.title || '',
+          senderId,
+          senderName: sender?.full_name || '',
+          senderEmail: sender?.email || '',
+          messageId: messageId,
+        };
+        await pool.query(
+          `
+            INSERT INTO notifications (id, user_id, title, body, data)
+            VALUES ($1, $2, $3, $4, $5)
+          `,
+          [
+            notificationId,
+            receiverUser.id,
+            sender?.full_name ? `${sender.full_name} sent you a message` : 'New project message',
+            body,
+            JSON.stringify(notifData),
+          ]
+        );
+      }
+
       return res.status(201).json(mapMessageRow(hydrated));
     } catch (error) {
       logError(

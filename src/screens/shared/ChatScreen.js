@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -170,80 +172,87 @@ const ChatScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>{project?.title || 'Project Chat'}</Text>
-          <Text style={styles.headerSubtitle}>
-            {counterpart?.fullName
-              ? `Chat with ${counterpart.fullName}`
-              : 'Chat unlocks once the match is confirmed'}
-          </Text>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Text style={styles.backText}>←</Text>
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>{project?.title || 'Project Chat'}</Text>
+            <Text style={styles.headerSubtitle}>
+              {counterpart?.fullName
+                ? `Chat with ${counterpart.fullName}`
+                : 'Chat unlocks once the match is confirmed'}
+            </Text>
+          </View>
         </View>
-      </View>
 
-      {!canSend ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>Chat unavailable</Text>
-          <Text style={styles.emptyBody}>
-            {project?.assignedContractor
-              ? 'Sign in to start messaging.'
-              : 'Chat will unlock once a contractor is assigned to this project.'}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          ref={listRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderMessage}
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={
-            !isLoading ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>No messages yet</Text>
-                <Text style={styles.emptyBody}>Start the conversation to keep work moving.</Text>
-              </View>
-            ) : null
-          }
-        />
-      )}
+        {!canSend ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>Chat unavailable</Text>
+            <Text style={styles.emptyBody}>
+              {project?.assignedContractor
+                ? 'Sign in to start messaging.'
+                : 'Chat will unlock once a contractor is assigned to this project.'}
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={listRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            renderItem={renderMessage}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              !isLoading ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>No messages yet</Text>
+                  <Text style={styles.emptyBody}>Start the conversation to keep work moving.</Text>
+                </View>
+              ) : null
+            }
+          />
+        )}
 
-      <View style={styles.composer}>
-        {editingMessage ? (
-          <View style={styles.editBanner}>
-            <Text style={styles.editLabel}>Editing message</Text>
-            <TouchableOpacity onPress={() => setEditingMessage(null)}>
-              <Text style={styles.editCancel}>Cancel</Text>
+        <View style={styles.composer}>
+          {editingMessage ? (
+            <View style={styles.editBanner}>
+              <Text style={styles.editLabel}>Editing message</Text>
+              <TouchableOpacity onPress={() => setEditingMessage(null)}>
+                <Text style={styles.editCancel}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              placeholder={canSend ? 'Type a message' : 'Chat unavailable'}
+              value={input}
+              onChangeText={setInput}
+              editable={canSend && !isSubmitting}
+              multiline
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, !input.trim() || !canSend ? styles.sendDisabled : null]}
+              onPress={handleSend}
+              disabled={!input.trim() || !canSend || isSubmitting}
+            >
+              <Text style={styles.sendText}>{editingMessage ? 'Save' : 'Send'}</Text>
             </TouchableOpacity>
           </View>
-        ) : null}
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.input}
-            placeholder={canSend ? 'Type a message' : 'Chat unavailable'}
-            value={input}
-            onChangeText={setInput}
-            editable={canSend && !isSubmitting}
-            multiline
-          />
-          <TouchableOpacity
-            style={[styles.sendButton, !input.trim() || !canSend ? styles.sendDisabled : null]}
-            onPress={handleSend}
-            disabled={!input.trim() || !canSend || isSubmitting}
-          >
-            <Text style={styles.sendText}>{editingMessage ? 'Save' : 'Send'}</Text>
-          </TouchableOpacity>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.background },
+  flex: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

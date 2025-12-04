@@ -41,9 +41,11 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
+        <View style={styles.headerRow}>
           <Text style={styles.title}>{project.title}</Text>
-          <Text style={styles.subtitle}>{project.projectType || 'Project'}</Text>
+          <View style={styles.typeTag}>
+            <Text style={styles.typeText}>{project.projectType || 'Project'}</Text>
+          </View>
         </View>
 
         <View style={styles.card}>
@@ -122,9 +124,20 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.background },
   content: { padding: 20, gap: 14 },
-  header: { gap: 6 },
-  title: { fontSize: 24, fontWeight: '700', color: palette.text },
-  subtitle: { color: palette.muted },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  title: { fontSize: 24, fontWeight: '700', color: palette.text, flexShrink: 1 },
+  typeTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: palette.primary,
+  },
+  typeText: { color: '#fff', fontWeight: '700' },
   card: {
     backgroundColor: palette.surface,
     borderRadius: 14,

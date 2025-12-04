@@ -16,6 +16,8 @@ import SelfieVerificationScreen from '../screens/contractor/SelfieVerificationSc
 import VerificationScreen from '../screens/contractor/VerificationScreen';
 import HomeownerDashboard from '../screens/homeowner/HomeownerDashboard';
 import WorkerDashboard from '../screens/worker/WorkerDashboard';
+import ExpenseTrackingScreen from '../screens/contractor/ExpenseTrackingScreen';
+import PayrollTrackingScreen from '../screens/contractor/PayrollTrackingScreen';
 
 // Homeowner screens
 import SubmitMilestoneScreen from '../screens/contractor/SubmitMilestoneScreen';
@@ -25,6 +27,8 @@ import ProjectDetailsScreen from '../screens/homeowner/ProjectDetailsScreen';
 import ReviewMilestoneScreen from '../screens/homeowner/ReviewMilestoneScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import WalletScreen from '../screens/shared/WalletScreen';
+import ContractsScreen from '../screens/shared/ContractsScreen';
+import ContractDetailsScreen from '../screens/shared/ContractDetailsScreen';
 import ProjectsListScreen from '../screens/homeowner/ProjectsListScreen';
 import FindJobsScreen from '../screens/contractor/FindJobsScreen';
 import ContractorProjectDetailsScreen from '../screens/contractor/ContractorProjectDetailsScreen';
@@ -147,6 +151,26 @@ const MainAppStack = () => (
         name="Wallet"
         component={WalletScreen}
         options={{ title: 'Wallet' }}
+      />
+      <MainStack.Screen
+        name="ExpenseTracking"
+        component={ExpenseTrackingScreen}
+        options={{ title: 'Expense Tracking' }}
+      />
+      <MainStack.Screen
+        name="PayrollTracking"
+        component={PayrollTrackingScreen}
+        options={{ title: 'Payroll Tracking' }}
+      />
+      <MainStack.Screen
+        name="Contracts"
+        component={ContractsScreen}
+        options={{ title: 'Contracts' }}
+      />
+      <MainStack.Screen
+        name="ContractDetails"
+        component={ContractDetailsScreen}
+        options={{ title: 'Contract Details' }}
       />
     </MainStack.Navigator>
   );

@@ -117,7 +117,10 @@ const ProjectPersonnelScreen = ({ route, navigation }) => {
             await projectAPI.deleteProjectPersonnel(project.id, personId, { userId: user.id });
             await loadPeople();
           } catch (error) {
-            Alert.alert('Error', error?.response?.data?.message || 'Failed to remove');
+            const msg = error?.response?.data?.message || '';
+            // Suppress duplicate messaging for protected owner removal; general errors still show.
+            if (msg.toLowerCase().includes('owner')) return;
+            Alert.alert('Error', msg || 'Failed to remove');
           }
         },
       },

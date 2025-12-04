@@ -1,5 +1,5 @@
-import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import { NavigationIndependentTree } from '@react-navigation/native';
 import React from 'react';
 import { useSelector } from 'react-redux';
 import { useEffect } from 'react';
@@ -153,7 +153,7 @@ const MainAppStack = () => (
   );
 
   return (
-    <NavigationContainer independent>
+    <NavigationIndependentTree>
       <RootStack.Navigator
         key={isAuthenticated ? 'app-stack' : 'auth-stack'}
         initialRouteName={isAuthenticated ? 'MainApp' : 'Welcome'}
@@ -173,7 +173,7 @@ const MainAppStack = () => (
           <RootStack.Screen name="MainApp" component={MainAppStack} />
         )}
       </RootStack.Navigator>
-    </NavigationContainer>
+    </NavigationIndependentTree>
   );
 };
 

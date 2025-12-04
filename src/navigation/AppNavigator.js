@@ -1,5 +1,4 @@
 import { createStackNavigator } from '@react-navigation/stack';
-import { NavigationIndependentTree } from '@react-navigation/native';
 import React from 'react';
 import { useSelector } from 'react-redux';
 import { useEffect } from 'react';
@@ -153,27 +152,25 @@ const MainAppStack = () => (
   );
 
   return (
-    <NavigationIndependentTree>
-      <RootStack.Navigator
-        key={isAuthenticated ? 'app-stack' : 'auth-stack'}
-        initialRouteName={isAuthenticated ? 'MainApp' : 'Welcome'}
-        screenOptions={{
-          headerShown: false,
-          gestureEnabled: true,
-        }}
-      >
-        {!isAuthenticated ? (
-          <>
-            <RootStack.Screen name="Welcome" component={WelcomeScreen} />
-            <RootStack.Screen name="RoleSelection" component={RoleSelectionScreen} />
-            <RootStack.Screen name="Login" component={LoginScreen} />
-            <RootStack.Screen name="Register" component={RegisterScreen} />
-          </>
-        ) : (
-          <RootStack.Screen name="MainApp" component={MainAppStack} />
-        )}
-      </RootStack.Navigator>
-    </NavigationIndependentTree>
+    <RootStack.Navigator
+      key={isAuthenticated ? 'app-stack' : 'auth-stack'}
+      initialRouteName={isAuthenticated ? 'MainApp' : 'Welcome'}
+      screenOptions={{
+        headerShown: false,
+        gestureEnabled: true,
+      }}
+    >
+      {!isAuthenticated ? (
+        <>
+          <RootStack.Screen name="Welcome" component={WelcomeScreen} />
+          <RootStack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+          <RootStack.Screen name="Login" component={LoginScreen} />
+          <RootStack.Screen name="Register" component={RegisterScreen} />
+        </>
+      ) : (
+        <RootStack.Screen name="MainApp" component={MainAppStack} />
+      )}
+    </RootStack.Navigator>
   );
 };
 

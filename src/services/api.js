@@ -124,6 +124,16 @@ export const projectAPI = {
     api.post(`/projects/${projectId}/leave`, { contractorId }),
 };
 
+export const messageAPI = {
+  list: async (projectId, userId) =>
+    api.get(`/projects/${projectId}/messages`, { params: { userId } }),
+  send: async (projectId, payload) => api.post(`/projects/${projectId}/messages`, payload),
+  update: async (projectId, messageId, payload) =>
+    api.put(`/projects/${projectId}/messages/${messageId}`, payload),
+  remove: async (projectId, messageId, payload) =>
+    api.delete(`/projects/${projectId}/messages/${messageId}`, { data: payload }),
+};
+
 // Invoice API calls (mocked for now)
 export const invoiceAPI = {
   listInvoices: async () => {

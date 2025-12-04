@@ -383,6 +383,26 @@ const initDb = async () => {
   );
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_messages (
+      id UUID PRIMARY KEY,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      receiver_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      body TEXT NOT NULL,
+      is_deleted BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ,
+      deleted_at TIMESTAMPTZ
+    )
+  `);
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS project_messages_project_id_idx ON project_messages (project_id, created_at)'
+  );
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS project_messages_sender_idx ON project_messages (sender_id)'
+  );
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS feature_flags (
       id SERIAL PRIMARY KEY,
       feature_name TEXT UNIQUE NOT NULL,
@@ -587,6 +607,85 @@ const getProjectById = async (projectId) => {
   return result.rows[0] || null;
 };
 
+const getProjectParticipants = async (projectId) => {
+  if (!projectId) return null;
+  await assertDbReady();
+  const result = await pool.query(
+    `
+      SELECT
+        p.user_id AS owner_id,
+        owner.full_name AS owner_full_name,
+        acc.contractor_id AS contractor_id,
+        acc.contractor_full_name
+      FROM projects p
+      LEFT JOIN users owner ON owner.id = p.user_id
+      LEFT JOIN LATERAL (
+        SELECT
+          pa.contractor_id,
+          uc.full_name AS contractor_full_name
+        FROM project_applications pa
+        JOIN users uc ON uc.id = pa.contractor_id
+        WHERE pa.project_id = p.id AND pa.status = 'accepted'
+        ORDER BY pa.created_at DESC
+        LIMIT 1
+      ) acc ON TRUE
+      WHERE p.id = $1
+      LIMIT 1
+    `,
+    [projectId]
+  );
+  if (!result.rows.length) return null;
+  const row = result.rows[0];
+  return {
+    ownerId: row.owner_id,
+    ownerName: row.owner_full_name,
+    contractorId: row.contractor_id,
+    contractorName: row.contractor_full_name,
+  };
+};
+
+const isProjectParticipant = (participants, userId) => {
+  if (!participants || !userId) return false;
+  return participants.ownerId === userId || (!!participants.contractorId && participants.contractorId === userId);
+};
+
+const resolveMessageReceiver = (participants, senderId, requestedReceiverId) => {
+  if (!participants || !senderId) return null;
+  if (requestedReceiverId && isProjectParticipant(participants, requestedReceiverId)) {
+    return requestedReceiverId;
+  }
+  if (participants.ownerId && participants.ownerId !== senderId) {
+    return participants.ownerId;
+  }
+  if (participants.contractorId && participants.contractorId !== senderId) {
+    return participants.contractorId;
+  }
+  return null;
+};
+
+const fetchMessageWithUsers = async (messageId) => {
+  if (!messageId) return null;
+  const result = await pool.query(
+    `
+      SELECT
+        pm.*,
+        sender.full_name AS sender_full_name,
+        sender.email AS sender_email,
+        sender.role AS sender_role,
+        receiver.full_name AS receiver_full_name,
+        receiver.email AS receiver_email,
+        receiver.role AS receiver_role
+      FROM project_messages pm
+      LEFT JOIN users sender ON sender.id = pm.sender_id
+      LEFT JOIN users receiver ON receiver.id = pm.receiver_id
+      WHERE pm.id = $1
+      LIMIT 1
+    `,
+    [messageId]
+  );
+  return result.rows[0] || null;
+};
+
 const EXPENSE_CATEGORIES = new Set(['materials', 'gas', 'tools', 'other']);
 
 const mapExpenseRow = (row = {}) => ({
@@ -627,6 +726,34 @@ const mapWorkHourRow = (row = {}) => ({
         fullName: row.contractor_full_name,
         email: row.contractor_email,
         phone: row.contractor_phone,
+      }
+    : undefined,
+});
+
+const mapMessageRow = (row = {}) => ({
+  id: row.id,
+  projectId: row.project_id,
+  senderId: row.sender_id,
+  receiverId: row.receiver_id,
+  body: row.body || '',
+  isDeleted: !!row.is_deleted,
+  createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+  updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+  deletedAt: row.deleted_at instanceof Date ? row.deleted_at.toISOString() : row.deleted_at,
+  sender: row.sender_id
+    ? {
+        id: row.sender_id,
+        fullName: row.sender_full_name,
+        email: row.sender_email,
+        role: row.sender_role,
+      }
+    : undefined,
+  receiver: row.receiver_id
+    ? {
+        id: row.receiver_id,
+        fullName: row.receiver_full_name,
+        email: row.receiver_email,
+        role: row.receiver_role,
       }
     : undefined,
 });
@@ -2693,6 +2820,211 @@ app.get('/api/work-hours/project/:projectId/summary', async (req, res) => {
     return res.status(500).json({ message });
   }
 });
+
+app.get('/api/projects/:projectId/messages', async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { userId } = req.query || {};
+      if (!projectId || !isUuid(projectId)) {
+        return res.status(400).json({ message: 'Invalid projectId' });
+      }
+      if (!userId || !isUuid(userId)) {
+        return res.status(400).json({ message: 'userId is required' });
+      }
+
+      await assertDbReady();
+      const participants = await getProjectParticipants(projectId);
+      if (!participants) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+      if (!isProjectParticipant(participants, userId)) {
+        return res.status(403).json({ message: 'Not authorized to view messages for this project' });
+      }
+
+      const result = await pool.query(
+        `
+          SELECT
+            pm.*,
+            sender.full_name AS sender_full_name,
+            sender.email AS sender_email,
+            sender.role AS sender_role,
+            receiver.full_name AS receiver_full_name,
+            receiver.email AS receiver_email,
+            receiver.role AS receiver_role
+          FROM project_messages pm
+          LEFT JOIN users sender ON sender.id = pm.sender_id
+          LEFT JOIN users receiver ON receiver.id = pm.receiver_id
+          WHERE pm.project_id = $1
+          ORDER BY pm.created_at ASC
+        `,
+        [projectId]
+      );
+
+      return res.json(result.rows.map((row) => mapMessageRow(row)));
+    } catch (error) {
+      logError(
+        'project-messages:list:error',
+        { projectId: req.params?.projectId, userId: req.query?.userId },
+        error
+      );
+      const message = pool
+        ? 'Failed to fetch messages'
+        : 'Database is not configured (set DATABASE_URL)';
+      return res.status(500).json({ message });
+    }
+  });
+
+  app.post('/api/projects/:projectId/messages', async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { senderId, receiverId, body } = req.body || {};
+      if (!projectId || !isUuid(projectId)) {
+        return res.status(400).json({ message: 'Invalid projectId' });
+      }
+      if (!senderId || !isUuid(senderId)) {
+        return res.status(400).json({ message: 'senderId is required' });
+      }
+      const trimmedBody = String(body || '').trim();
+      if (!trimmedBody) {
+        return res.status(400).json({ message: 'Message body is required' });
+      }
+
+      await assertDbReady();
+      const participants = await getProjectParticipants(projectId);
+      if (!participants) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+      if (!isProjectParticipant(participants, senderId)) {
+        return res.status(403).json({ message: 'Not authorized to send messages for this project' });
+      }
+
+      const resolvedReceiver = resolveMessageReceiver(participants, senderId, receiverId);
+      if (!resolvedReceiver) {
+        return res.status(400).json({ message: 'No conversation partner available for this project' });
+      }
+
+      const messageId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+      const insertResult = await pool.query(
+        `
+          INSERT INTO project_messages (id, project_id, sender_id, receiver_id, body)
+          VALUES ($1, $2, $3, $4, $5)
+          RETURNING id
+        `,
+        [messageId, projectId, senderId, resolvedReceiver, trimmedBody]
+      );
+
+      const hydrated = await fetchMessageWithUsers(insertResult.rows[0].id);
+      return res.status(201).json(mapMessageRow(hydrated));
+    } catch (error) {
+      logError(
+        'project-messages:create:error',
+        { projectId: req.params?.projectId, senderId: req.body?.senderId },
+        error
+      );
+      const message = pool
+        ? 'Failed to send message'
+        : 'Database is not configured (set DATABASE_URL)';
+      return res.status(500).json({ message });
+    }
+  });
+
+  app.put('/api/projects/:projectId/messages/:messageId', async (req, res) => {
+    try {
+      const { projectId, messageId } = req.params;
+      const { userId, body } = req.body || {};
+      if (!projectId || !isUuid(projectId)) {
+        return res.status(400).json({ message: 'Invalid projectId' });
+      }
+      if (!messageId || !isUuid(messageId)) {
+        return res.status(400).json({ message: 'Invalid messageId' });
+      }
+      if (!userId || !isUuid(userId)) {
+        return res.status(400).json({ message: 'userId is required' });
+      }
+      const trimmedBody = String(body || '').trim();
+      if (!trimmedBody) {
+        return res.status(400).json({ message: 'Message body is required' });
+      }
+
+      await assertDbReady();
+      const messageResult = await pool.query(
+        'SELECT * FROM project_messages WHERE id = $1 AND project_id = $2 LIMIT 1',
+        [messageId, projectId]
+      );
+      if (!messageResult.rows.length) {
+        return res.status(404).json({ message: 'Message not found' });
+      }
+      const messageRow = messageResult.rows[0];
+      if (messageRow.sender_id !== userId) {
+        return res.status(403).json({ message: 'Only the sender can edit this message' });
+      }
+      if (messageRow.is_deleted) {
+        return res.status(400).json({ message: 'Cannot edit a deleted message' });
+      }
+
+      await pool.query(
+        'UPDATE project_messages SET body = $1, updated_at = NOW() WHERE id = $2',
+        [trimmedBody, messageId]
+      );
+      const hydrated = await fetchMessageWithUsers(messageId);
+      return res.json(mapMessageRow(hydrated));
+    } catch (error) {
+      logError(
+        'project-messages:update:error',
+        { projectId: req.params?.projectId, messageId: req.params?.messageId },
+        error
+      );
+      const message = pool
+        ? 'Failed to update message'
+        : 'Database is not configured (set DATABASE_URL)';
+      return res.status(500).json({ message });
+    }
+  });
+
+  app.delete('/api/projects/:projectId/messages/:messageId', async (req, res) => {
+    try {
+      const { projectId, messageId } = req.params;
+      const { userId } = req.body || {};
+      if (!projectId || !isUuid(projectId)) {
+        return res.status(400).json({ message: 'Invalid projectId' });
+      }
+      if (!messageId || !isUuid(messageId)) {
+        return res.status(400).json({ message: 'Invalid messageId' });
+      }
+      if (!userId || !isUuid(userId)) {
+        return res.status(400).json({ message: 'userId is required' });
+      }
+
+      await assertDbReady();
+      const messageResult = await pool.query(
+        'SELECT * FROM project_messages WHERE id = $1 AND project_id = $2 LIMIT 1',
+        [messageId, projectId]
+      );
+      if (!messageResult.rows.length) {
+        return res.status(404).json({ message: 'Message not found' });
+      }
+      const messageRow = messageResult.rows[0];
+      if (messageRow.sender_id !== userId) {
+        return res.status(403).json({ message: 'Only the sender can delete this message' });
+      }
+
+      await pool.query(
+        'UPDATE project_messages SET is_deleted = TRUE, deleted_at = NOW(), updated_at = NOW() WHERE id = $1',
+        [messageId]
+      );
+      return res.status(204).send();
+    } catch (error) {
+      logError(
+        'project-messages:delete:error',
+        { projectId: req.params?.projectId, messageId: req.params?.messageId },
+        error
+      );
+      const message = pool
+        ? 'Failed to delete message'
+        : 'Database is not configured (set DATABASE_URL)';
+      return res.status(500).json({ message });
+    }
+  });
 
 app.post('/api/contracts', async (req, res) => {
   try {

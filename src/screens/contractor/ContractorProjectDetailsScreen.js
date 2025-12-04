@@ -20,6 +20,11 @@ const ContractorProjectDetailsScreen = ({ route, navigation }) => {
   const { appliedProjectIds } = useSelector((state) => state.projects);
   const [isApplying, setIsApplying] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  const canChat =
+    project?.assignedContractor?.id &&
+    project?.owner?.id &&
+    user?.id &&
+    project.assignedContractor.id === user.id;
 
   if (!project) {
     return (
@@ -122,6 +127,14 @@ const ContractorProjectDetailsScreen = ({ route, navigation }) => {
 
       {(canApply || canLeave) && (
         <View style={styles.footer}>
+          {canChat && (
+            <TouchableOpacity
+              style={styles.chatButton}
+              onPress={() => navigation.navigate('Chat', { project })}
+            >
+              <Text style={styles.chatText}>Message Homeowner</Text>
+            </TouchableOpacity>
+          )}
           {canApply && (
             <TouchableOpacity
               style={[styles.applyButton, applied || isApplying ? styles.applyDisabled : null]}
@@ -172,6 +185,15 @@ const styles = StyleSheet.create({
     backgroundColor: palette.surface,
     gap: 10,
   },
+  chatButton: {
+    backgroundColor: '#E8EAFF',
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  chatText: { color: palette.primary, fontWeight: '700' },
   applyButton: {
     backgroundColor: palette.primary,
     padding: 16,

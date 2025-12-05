@@ -2794,6 +2794,32 @@ app.post('/api/applications/:applicationId/:action', async (req, res) => {
         'accepted',
         appRow.worker_post_id,
       ]);
+      await client.query(
+        `
+          INSERT INTO project_personnel (project_id, user_id, personnel_role)
+          VALUES ($1, $2, 'worker')
+          ON CONFLICT (project_id, user_id) DO NOTHING
+        `,
+        [appRow.project_id, appRow.contractor_id]
+      );
+      const workerNotifId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+      await client.query(
+        `
+          INSERT INTO notifications (id, user_id, title, body, data)
+          VALUES ($1, $2, $3, $4, $5)
+        `,
+        [
+          workerNotifId,
+          appRow.contractor_id,
+          'Added to project',
+          `${ownerName} accepted you for ${appRow.project_title}`,
+          JSON.stringify({
+            type: 'worker-added',
+            projectId: appRow.project_id,
+            projectTitle: appRow.project_title,
+          }),
+        ]
+      );
     }
 
     await client.query('COMMIT');

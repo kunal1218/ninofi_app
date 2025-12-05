@@ -1,22 +1,53 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSelector } from 'react-redux';
 import palette from '../../styles/palette';
+import { projectAPI } from '../../services/api';
 
 const WorkerGigsScreen = ({ navigation }) => {
   const { user } = useSelector((state) => state.auth);
   const { workerAssignments, workerProjects } = useSelector((state) => state.projects);
   const assignments = (workerAssignments || []).filter((a) => a.workerId === user?.id);
+  const [apps, setApps] = useState([]);
+
+  const loadApplications = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const res = await projectAPI.listGigApplications(user.id);
+      setApps(res.data || []);
+    } catch (err) {
+      console.log('gigs:apps:error', err?.response?.data || err.message);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    loadApplications();
+  }, [loadApplications]);
+
   const projects = (workerProjects || []).filter((p) => p);
+  const acceptedApps = apps.filter((a) => (a.status || '').toLowerCase() === 'accepted');
+  const cards = [];
+  const seen = new Set();
+  projects.forEach((p) => {
+    if (p?.id && !seen.has(p.id)) {
+      cards.push({ id: p.id, title: p.title, description: p.description });
+      seen.add(p.id);
+    }
+  });
+  acceptedApps.forEach((a) => {
+    const pid = a.project_id || a.projectId;
+    if (pid && !seen.has(pid)) {
+      cards.push({ id: pid, title: a.project_title || 'Project', description: a.message || '' });
+      seen.add(pid);
+    }
+  });
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>My Gigs</Text>
-        {(!projects || projects.length === 0) && (
-          <Text style={styles.muted}>No gigs assigned yet.</Text>
-        )}
-        {projects.map((proj) => (
+        {cards.length === 0 && <Text style={styles.muted}>No gigs assigned yet.</Text>}
+        {cards.map((proj) => (
           <TouchableOpacity
             key={proj.id}
             style={styles.card}

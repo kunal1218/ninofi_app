@@ -34,7 +34,6 @@ import NotificationDetailScreen from '../screens/shared/NotificationDetailScreen
 import ApplicationsScreen from '../screens/contractor/ApplicationsScreen';
 import WorkerGigsScreen from '../screens/worker/WorkerGigsScreen';
 import WorkerProjectScreen from '../screens/worker/WorkerProjectScreen';
-import BrowseGigsScreen from '../screens/worker/BrowseGigsScreen';
 import WorkerGigApplicationsScreen from '../screens/worker/WorkerGigApplicationsScreen';
 import ChatScreen from '../screens/shared/ChatScreen';
 import ProjectOverviewScreen from '../screens/shared/ProjectOverviewScreen';

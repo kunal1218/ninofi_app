@@ -57,6 +57,17 @@ const NotificationsScreen = ({ navigation }) => {
         return;
       }
 
+      if (data?.type === 'worker-added' && data.projectId) {
+        navigation.navigate('WorkerProject', { projectId: data.projectId });
+        return;
+      }
+
+      // Contractor application/worker gig application: go to detail for accept/deny
+      if (data?.applicationId || (data?.projectId && data?.contractorId)) {
+        navigation.navigate('NotificationDetail', { notification: n });
+        return;
+      }
+
       if (data?.projectId) {
         try {
           const res = await projectAPI.getProjectDetails(data.projectId);
@@ -69,11 +80,6 @@ const NotificationsScreen = ({ navigation }) => {
         } catch (err) {
           Alert.alert('Error', 'Could not open project from notification.');
         }
-      }
-
-      if (data?.type === 'worker-added' && data.projectId) {
-        navigation.navigate('WorkerProject', { projectId: data.projectId });
-        return;
       }
 
       navigation.navigate('NotificationDetail', { notification: n });

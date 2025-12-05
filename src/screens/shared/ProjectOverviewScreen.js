@@ -137,7 +137,7 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
             <Text style={styles.muted}>No milestones yet.</Text>
           ) : (
             milestones.map((m, idx) => (
-              <View key={m.id || idx} style={styles.milestoneRow}>
+              <View key={`${m.id || 'milestone'}-${idx}`} style={styles.milestoneRow}>
                 <View style={styles.milestoneBullet} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.milestoneName}>{m.name}</Text>

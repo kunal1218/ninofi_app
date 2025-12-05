@@ -5656,7 +5656,15 @@ app.get('/api/projects/:projectId/personnel', async (req, res) => {
     const rows = await fetchProjectPersonnel(projectId);
     const isOwnerOrContractor = participants && isProjectParticipant(participants, userId);
     const isPersonnelMember = rows.some((r) => r.user_id === userId);
-    if (!isOwnerOrContractor && !isPersonnelMember) {
+    let isAcceptedContractor = false;
+    if (!isOwnerOrContractor) {
+      const acceptedApp = await pool.query(
+        "SELECT 1 FROM project_applications WHERE project_id = $1 AND contractor_id = $2 AND status = 'accepted' LIMIT 1",
+        [projectId, userId]
+      );
+      isAcceptedContractor = acceptedApp.rows.length > 0;
+    }
+    if (!isOwnerOrContractor && !isPersonnelMember && !isAcceptedContractor) {
       return res.status(403).json({ message: 'Not authorized to view personnel' });
     }
 

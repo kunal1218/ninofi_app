@@ -40,6 +40,7 @@ const initialState = {
   isLoadingContractor: false,
   contractorError: null,
   workerAssignments: [],
+  workerProjects: [],
 };
 
 const projectSlice = createSlice({
@@ -125,6 +126,15 @@ const projectSlice = createSlice({
         createdAt: new Date().toISOString(),
       });
     },
+    addWorkerProject: (state, action) => {
+      if (!action.payload?.id) return;
+      const exists = state.workerProjects.find((p) => p.id === action.payload.id);
+      if (exists) {
+        Object.assign(exists, action.payload);
+      } else {
+        state.workerProjects.push(action.payload);
+      }
+    },
   },
 });
 
@@ -146,6 +156,7 @@ export const {
   fetchContractorProjectsSuccess,
   fetchContractorProjectsFailure,
   addWorkerAssignment,
+  addWorkerProject,
 } = projectSlice.actions;
 
 export default projectSlice.reducer;

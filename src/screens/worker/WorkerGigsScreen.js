@@ -5,29 +5,32 @@ import palette from '../../styles/palette';
 
 const WorkerGigsScreen = ({ navigation }) => {
   const { user } = useSelector((state) => state.auth);
-  const { workerAssignments } = useSelector((state) => state.projects);
+  const { workerAssignments, workerProjects } = useSelector((state) => state.projects);
   const assignments = (workerAssignments || []).filter((a) => a.workerId === user?.id);
+  const projects = (workerProjects || []).filter((p) => p);
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>My Gigs</Text>
-        {(!assignments || assignments.length === 0) && (
+        {(!projects || projects.length === 0) && (
           <Text style={styles.muted}>No gigs assigned yet.</Text>
         )}
-        {assignments.map((item) => (
+        {projects.map((proj) => (
           <TouchableOpacity
-            key={item.id}
+            key={proj.id}
             style={styles.card}
             onPress={() =>
               navigation.navigate('WorkerProject', {
-                projectId: item.projectId,
+                projectId: proj.id,
               })
             }
           >
-            <Text style={styles.cardTitle}>{item.description || 'Work Item'}</Text>
-            <Text style={styles.cardMeta}>Due: {item.dueDate || 'TBD'}</Text>
-            <Text style={styles.cardMeta}>Pay: ${Number(item.pay || 0).toLocaleString()}</Text>
+            <Text style={styles.cardTitle}>{proj.title || 'Project'}</Text>
+            <Text style={styles.cardMeta}>{proj.description || 'No description provided.'}</Text>
+            <Text style={styles.cardMeta}>
+              Assigned work: {assignments.filter((a) => a.projectId === proj.id).length}
+            </Text>
           </TouchableOpacity>
         ))}
       </ScrollView>

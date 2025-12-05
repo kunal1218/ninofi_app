@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import palette from '../../styles/palette';
 import { projectAPI } from '../../services/api';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { addWorkerProject } from '../../store/projectSlice';
 
 const WorkerProjectScreen = ({ route, navigation }) => {
   const { projectId } = route.params || {};
+  const dispatch = useDispatch();
   const { workerAssignments } = useSelector((state) => state.projects);
   const { user } = useSelector((state) => state.auth);
   const [project, setProject] = useState(null);
@@ -17,6 +19,7 @@ const WorkerProjectScreen = ({ route, navigation }) => {
     try {
       const res = await projectAPI.getProjectDetails(projectId);
       setProject(res.data);
+      dispatch(addWorkerProject(res.data));
     } catch (err) {
       console.log('worker:project:load:error', err?.response?.data || err.message);
     } finally {

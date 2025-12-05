@@ -5332,7 +5332,13 @@ app.get('/api/projects/:projectId/personnel', async (req, res) => {
     }
     const participants = await getProjectParticipants(projectId);
     if (!participants || !isProjectParticipant(participants, userId)) {
-      return res.status(403).json({ message: 'Not authorized to view personnel' });
+      const personnelCheck = await client.query(
+        'SELECT 1 FROM project_personnel WHERE project_id = $1 AND user_id = $2 LIMIT 1',
+        [projectId, userId]
+      );
+      if (!personnelCheck.rows.length) {
+        return res.status(403).json({ message: 'Not authorized to view personnel' });
+      }
     }
 
     const rows = await fetchProjectPersonnel(projectId);

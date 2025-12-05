@@ -150,46 +150,48 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
           )}
         </View>
 
-        <View style={styles.card}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Proposed Contracts</Text>
-            {contractsLoading ? <Text style={styles.muted}>Loading…</Text> : null}
-          </View>
-          {contractsError ? <Text style={styles.errorText}>{contractsError}</Text> : null}
-          {!contractsLoading && !contractsError && (!contracts || contracts.length === 0) ? (
-            <Text style={styles.muted}>No contracts yet.</Text>
-          ) : null}
-          {contracts?.map((c) => {
-            const statusLabel = (c.status || 'pending').toUpperCase();
-            return (
-              <View key={c.id} style={styles.contractCard}>
-                <View style={styles.contractHeader}>
-                  <Text style={styles.contractTitle}>{c.title || 'Contract'}</Text>
-                  <Text style={styles.contractMeta}>Status: {statusLabel}</Text>
-                  {typeof c.signatureCount === 'number' ? (
-                    <Text style={styles.contractMeta}>Signatures: {c.signatureCount}</Text>
-                  ) : null}
-                </View>
-                <View style={styles.contractActions}>
-                  <TouchableOpacity onPress={() => navigation.navigate('ContractView', { contract: c })}>
-                    <Text style={styles.actionLink}>View</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => navigation.navigate('ContractSignature', { contract: c })}>
-                    <Text style={styles.actionLink}>{statusLabel === 'SIGNED' ? 'View' : 'Sign'}</Text>
-                  </TouchableOpacity>
-                  {statusLabel === 'PENDING' ? (
-                    <TouchableOpacity onPress={() => handleDelete(c)}>
-                      <Text style={styles.actionLink}>Delete</Text>
+        {role !== 'worker' && (
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Proposed Contracts</Text>
+              {contractsLoading ? <Text style={styles.muted}>Loading…</Text> : null}
+            </View>
+            {contractsError ? <Text style={styles.errorText}>{contractsError}</Text> : null}
+            {!contractsLoading && !contractsError && (!contracts || contracts.length === 0) ? (
+              <Text style={styles.muted}>No contracts yet.</Text>
+            ) : null}
+            {contracts?.map((c) => {
+              const statusLabel = (c.status || 'pending').toUpperCase();
+              return (
+                <View key={c.id} style={styles.contractCard}>
+                  <View style={styles.contractHeader}>
+                    <Text style={styles.contractTitle}>{c.title || 'Contract'}</Text>
+                    <Text style={styles.contractMeta}>Status: {statusLabel}</Text>
+                    {typeof c.signatureCount === 'number' ? (
+                      <Text style={styles.contractMeta}>Signatures: {c.signatureCount}</Text>
+                    ) : null}
+                  </View>
+                  <View style={styles.contractActions}>
+                    <TouchableOpacity onPress={() => navigation.navigate('ContractView', { contract: c })}>
+                      <Text style={styles.actionLink}>View</Text>
                     </TouchableOpacity>
-                  ) : null}
+                    <TouchableOpacity onPress={() => navigation.navigate('ContractSignature', { contract: c })}>
+                      <Text style={styles.actionLink}>{statusLabel === 'SIGNED' ? 'View' : 'Sign'}</Text>
+                    </TouchableOpacity>
+                    {statusLabel === 'PENDING' ? (
+                      <TouchableOpacity onPress={() => handleDelete(c)}>
+                        <Text style={styles.actionLink}>Delete</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
                 </View>
-              </View>
-            );
-          })}
-          <TouchableOpacity style={[styles.button, styles.refreshButton]} onPress={loadContracts}>
-            <Text style={styles.personnelText}>Refresh</Text>
-          </TouchableOpacity>
-        </View>
+              );
+            })}
+            <TouchableOpacity style={[styles.button, styles.refreshButton]} onPress={loadContracts}>
+              <Text style={styles.personnelText}>Refresh</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.buttonRow}>
           <TouchableOpacity style={[styles.button, styles.personnelButton]} onPress={goPersonnel}>
@@ -202,14 +204,16 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
           ) : null}
         </View>
 
-        <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={[styles.button, styles.contractButton]}
-            onPress={handleProposeContract}
-          >
-            <Text style={styles.contractText}>Propose Contract</Text>
-          </TouchableOpacity>
-        </View>
+        {role !== 'worker' && (
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[styles.button, styles.contractButton]}
+              onPress={handleProposeContract}
+            >
+              <Text style={styles.contractText}>Propose Contract</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

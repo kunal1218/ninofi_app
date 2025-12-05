@@ -74,15 +74,25 @@ const ProjectPersonnelScreen = ({ route, navigation }) => {
     try {
       const res = await projectAPI.getProjectPersonnel(project.id, user.id);
       const rows = res.data || [];
-      const base = buildPersonnel(project);
-      const merged = [...base, ...rows.map((r) => ({
-        id: r.user?.id || r.userId,
-        name: r.user?.fullName,
-        role: r.role,
-        email: r.user?.email,
-        phone: r.user?.phone,
-        photo: r.user?.profilePhotoUrl,
-      }))];
+      let baseProject = project;
+      if (!project.assignedContractor || !project.owner) {
+        try {
+          const details = await projectAPI.getProjectDetails(project.id);
+          baseProject = details.data || project;
+        } catch {}
+      }
+      const base = buildPersonnel(baseProject);
+      const merged = [
+        ...base,
+        ...rows.map((r) => ({
+          id: r.user?.id || r.userId,
+          name: r.user?.fullName,
+          role: r.role,
+          email: r.user?.email,
+          phone: r.user?.phone,
+          photo: r.user?.profilePhotoUrl,
+        })),
+      ];
       const deduped = [];
       const seen = new Set();
       merged.forEach((p) => {

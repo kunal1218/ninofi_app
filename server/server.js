@@ -3419,8 +3419,12 @@ app.post('/api/projects', async (req, res) => {
       milestoneResults.push(result.rows[0]);
     }
 
-    // Ensure a draft contract exists for this project
-    await ensureProjectContract(client, projectResult.rows[0], milestoneResults);
+    // Ensure a draft contract exists for this project, but do not block creation if it fails
+    try {
+      await ensureProjectContract(client, projectResult.rows[0], milestoneResults);
+    } catch (contractErr) {
+      logError('project:create:ensure-contract:error', { projectId }, contractErr);
+    }
 
     const persistedMedia = await persistMedia(projectId, normalizedMedia);
     const mediaResults = [];

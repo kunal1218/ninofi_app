@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import palette from '../../styles/palette';
@@ -77,6 +77,23 @@ const WorkerGigsScreen = ({ navigation }) => {
     }
   });
 
+  const handleOpen = async (projId) => {
+    try {
+      await projectAPI.getProjectDetails(projId);
+      navigation.navigate('WorkerProject', { projectId: projId });
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 404) {
+        dispatch(removeWorkerProject(projId));
+        setApps((prev) => prev.filter((a) => (a.project_id || a.projectId) !== projId));
+        loadApplications();
+        Alert.alert('Project removed', 'This project is no longer available.');
+      } else {
+        Alert.alert('Error', err?.response?.data?.message || 'Failed to open project');
+      }
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -86,11 +103,7 @@ const WorkerGigsScreen = ({ navigation }) => {
           <TouchableOpacity
             key={proj.id}
             style={styles.card}
-            onPress={() =>
-              navigation.navigate('WorkerProject', {
-                projectId: proj.id,
-              })
-            }
+            onPress={() => handleOpen(proj.id)}
           >
             <Text style={styles.cardTitle}>{proj.title || 'Project'}</Text>
             <Text style={styles.cardMeta}>{proj.description || 'No description provided.'}</Text>

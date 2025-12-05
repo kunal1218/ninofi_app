@@ -602,6 +602,16 @@ const initDb = async () => {
   await pool.query(
     'CREATE INDEX IF NOT EXISTS project_applications_contractor_id_idx ON project_applications (contractor_id)'
   );
+  await pool.query(
+    "ALTER TABLE project_applications ADD COLUMN IF NOT EXISTS is_worker_post BOOLEAN NOT NULL DEFAULT false"
+  );
+  await pool.query('ALTER TABLE project_applications ADD COLUMN IF NOT EXISTS work_date DATE');
+  await pool.query('ALTER TABLE project_applications ADD COLUMN IF NOT EXISTS pay NUMERIC');
+  await pool.query('ALTER TABLE project_applications ADD COLUMN IF NOT EXISTS tags TEXT[]');
+  await pool.query('ALTER TABLE project_applications ADD COLUMN IF NOT EXISTS worker_post_id UUID');
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS project_applications_worker_post_idx ON project_applications (worker_post_id)'
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS notifications (
@@ -1433,7 +1443,10 @@ const isUserVerified = async (userId) => {
 
 const isProjectParticipant = (participants, userId) => {
   if (!participants || !userId) return false;
-  return participants.ownerId === userId || (!!participants.contractorId && participants.contractorId === userId);
+  return (
+    participants.ownerId === userId ||
+    (!!participants.contractorId && participants.contractorId === userId)
+  );
 };
 
 const fetchMessageWithUsers = async (messageId) => {
@@ -2236,7 +2249,7 @@ app.post('/api/projects/:projectId/apply', async (req, res) => {
   const client = await pool.connect();
   try {
     const { projectId } = req.params;
-    const { contractorId, message } = req.body || {};
+    const { contractorId, message, workDate, pay, workerPostId } = req.body || {};
     if (!isUuid(projectId) || !isUuid(contractorId)) {
       return res.status(400).json({ message: 'Invalid projectId or contractorId' });
     }
@@ -2275,11 +2288,11 @@ app.post('/api/projects/:projectId/apply', async (req, res) => {
     const appId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
     const application = await client.query(
       `
-        INSERT INTO project_applications (id, project_id, contractor_id, status, message)
-        VALUES ($1, $2, $3, 'pending', $4)
+        INSERT INTO project_applications (id, project_id, contractor_id, status, message, work_date, pay, worker_post_id)
+        VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7)
         RETURNING *
       `,
-      [appId, projectId, contractorId, message || '']
+      [appId, projectId, contractorId, message || '', workDate || null, pay || null, workerPostId || null]
     );
 
     const notificationId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
@@ -2327,6 +2340,141 @@ app.post('/api/projects/:projectId/apply', async (req, res) => {
     return res.status(500).json({ message });
   } finally {
     client.release();
+  }
+});
+
+// Contractor posts work for workers to apply
+app.post('/api/projects/:projectId/gigs', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { projectId } = req.params;
+    const { contractorId, title, description, workDate, pay, tags = [] } = req.body || {};
+    if (!isUuid(projectId) || !isUuid(contractorId)) {
+      return res.status(400).json({ message: 'Invalid projectId or contractorId' });
+    }
+    await assertDbReady();
+    const project = await getProjectById(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    const participants = await getProjectParticipants(projectId);
+    if (!participants || participants.contractorId !== contractorId) {
+      return res.status(403).json({ message: 'Only the assigned contractor can post work' });
+    }
+    await client.query('BEGIN');
+    const gigId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+    const inserted = await client.query(
+      `
+        INSERT INTO project_applications (id, project_id, contractor_id, status, message, is_worker_post, work_date, pay, tags)
+        VALUES ($1, $2, $3, 'pending', $4, true, $5, $6, $7)
+        RETURNING *
+      `,
+      [gigId, projectId, contractorId, description || title || '', workDate || null, pay || null, tags]
+    );
+    await client.query('COMMIT');
+    return res.status(201).json(inserted.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('gigs:create:error', error);
+    const message = pool ? 'Failed to post work' : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  } finally {
+    client.release();
+  }
+});
+
+// Worker applies to a posted gig
+app.post('/api/gigs/:gigId/apply', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { gigId } = req.params;
+    const { workerId, message } = req.body || {};
+    if (!isUuid(gigId) || !isUuid(workerId)) {
+      return res.status(400).json({ message: 'Invalid ids' });
+    }
+    await assertDbReady();
+    const gigRes = await client.query(
+      'SELECT * FROM project_applications WHERE id = $1 AND is_worker_post = true AND status = $2',
+      [gigId, 'pending']
+    );
+    if (!gigRes.rows.length) {
+      return res.status(404).json({ message: 'Gig not found or unavailable' });
+    }
+    const gigRow = gigRes.rows[0];
+
+    // Simple date conflict check
+    if (gigRow.work_date) {
+      const conflict = await client.query(
+        `SELECT 1 FROM project_applications
+         WHERE contractor_id = $1 AND status = 'accepted' AND work_date = $2
+         LIMIT 1`,
+        [workerId, gigRow.work_date]
+      );
+      if (conflict.rows.length) {
+        return res.status(409).json({ message: 'Date conflicts with another gig' });
+      }
+    }
+
+    const appId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+    const inserted = await client.query(
+      `
+        INSERT INTO project_applications (id, project_id, contractor_id, status, message, work_date, pay, worker_post_id)
+        VALUES ($1, $2, $3, 'pending', $4, $5, $6, $7)
+        RETURNING *
+      `,
+      [appId, gigRow.project_id, workerId, message || '', gigRow.work_date || null, gigRow.pay || null, gigId]
+    );
+
+    const notifId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+    await client.query(
+      `
+        INSERT INTO notifications (id, user_id, title, body, data)
+        VALUES ($1, $2, $3, $4, $5)
+      `,
+      [
+        notifId,
+        gigRow.contractor_id,
+        'New worker application',
+        'A worker applied to your posted work',
+        JSON.stringify({
+          applicationId: appId,
+          projectId: gigRow.project_id,
+          gigId,
+        }),
+      ]
+    );
+
+    return res.status(201).json(inserted.rows[0]);
+  } catch (error) {
+    console.error('gigs:apply:error', error);
+    const message = pool ? 'Failed to apply to gig' : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  } finally {
+    client.release();
+  }
+});
+
+// Worker-facing gigs list
+app.get('/api/gigs/open', async (_req, res) => {
+  try {
+    await assertDbReady();
+    const result = await pool.query(
+      `
+        SELECT pa.*, p.title AS project_title, p.description AS project_description
+        FROM project_applications pa
+        JOIN projects p ON p.id = pa.project_id
+        WHERE pa.is_worker_post = true
+          AND pa.status = 'pending'
+          AND NOT EXISTS (
+            SELECT 1 FROM project_applications pa2
+            WHERE pa2.worker_post_id = pa.id AND pa2.status = 'accepted'
+          )
+        ORDER BY pa.created_at DESC
+      `
+    );
+    return res.json(result.rows);
+  } catch (error) {
+    console.error('gigs:list:error', error);
+    const message = pool ? 'Failed to load gigs' : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
   }
 });
 
@@ -2444,11 +2592,13 @@ app.post('/api/applications/:applicationId/:action', async (req, res) => {
           u.full_name AS contractor_name,
           u.email AS contractor_email,
           u.phone AS contractor_phone,
-          owner.full_name AS owner_full_name
+          owner.full_name AS owner_full_name,
+          gig.contractor_id AS gig_contractor_id
         FROM project_applications pa
         JOIN projects p ON p.id = pa.project_id
         JOIN users u ON u.id = pa.contractor_id
         LEFT JOIN users owner ON owner.id = p.user_id
+        LEFT JOIN project_applications gig ON gig.id = pa.worker_post_id
         WHERE pa.id::text = $1
       `,
       [applicationId]
@@ -2458,8 +2608,13 @@ app.post('/api/applications/:applicationId/:action', async (req, res) => {
     }
 
     const appRow = appResult.rows[0];
-    if (ownerId && ownerId !== appRow.owner_id) {
-      return res.status(403).json({ message: 'Not authorized to modify this application' });
+    const isWorkerApplication = !!appRow.worker_post_id;
+    if (ownerId) {
+      const ownerAllowed =
+        ownerId === appRow.owner_id || (isWorkerApplication && ownerId === appRow.gig_contractor_id);
+      if (!ownerAllowed) {
+        return res.status(403).json({ message: 'Not authorized to modify this application' });
+      }
     }
 
     if (appRow.status && appRow.status !== 'pending') {
@@ -2494,14 +2649,17 @@ app.post('/api/applications/:applicationId/:action', async (req, res) => {
     }
 
     const notificationId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
-    const ownerName = appRow.owner_full_name || 'Homeowner';
+    const ownerName = appRow.owner_full_name || 'Owner';
+    const senderName = isWorkerApplication
+      ? (ownerId && ownerId === appRow.gig_contractor_id ? 'Contractor' : ownerName)
+      : ownerName;
     const notifTitle =
       newStatus === 'accepted'
-        ? `${ownerName} accepted your application`
-        : `${ownerName} responded to your application`;
+        ? `${senderName} accepted your application`
+        : `${senderName} responded to your application`;
     const notifBody =
       newStatus === 'accepted'
-        ? `${ownerName} accepted your application for ${appRow.project_title}`
+        ? `${senderName} accepted your application for ${appRow.project_title}`
         : `${appRow.project_title} has been ${newStatus}`;
     await client.query(
       `
@@ -2518,10 +2676,17 @@ app.post('/api/applications/:applicationId/:action', async (req, res) => {
           projectTitle: appRow.project_title,
           applicationId,
           status: newStatus,
-          ownerName,
+          ownerName: senderName,
         }),
       ]
     );
+
+    if (newStatus === 'accepted' && appRow.worker_post_id) {
+      await client.query('UPDATE project_applications SET status = $1 WHERE id = $2', [
+        'accepted',
+        appRow.worker_post_id,
+      ]);
+    }
 
     await client.query('COMMIT');
     logInfo('applications:update:success', { applicationId, newStatus });

@@ -163,9 +163,9 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
             const statusLabel = (c.status || 'pending').toUpperCase();
             return (
               <View key={c.id} style={styles.contractRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.milestoneName}>{c.title || 'Contract'}</Text>
-                  <Text style={styles.milestoneMeta}>
+                <View style={styles.contractHeader}>
+                  <Text style={styles.contractTitle}>{c.title || 'Contract'}</Text>
+                  <Text style={styles.contractMeta}>
                     Status: {statusLabel}
                     {typeof c.signatureCount === 'number' ? ` • Signatures: ${c.signatureCount}` : ''}
                   </Text>
@@ -282,12 +282,15 @@ const styles = StyleSheet.create({
   contractText: { color: '#fff', fontWeight: '700' },
   contractRow: {
     flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
-    paddingVertical: 8,
+    gap: 8,
+    alignItems: 'flex-start',
+    paddingVertical: 10,
   },
+  contractHeader: { flex: 1, gap: 2 },
+  contractTitle: { fontWeight: '700', color: palette.text, fontSize: 15 },
+  contractMeta: { color: palette.muted, fontSize: 12 },
   contractActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  signButton: { backgroundColor: palette.primary, flexBasis: 110 },
+  signButton: { backgroundColor: palette.primary, paddingHorizontal: 14, paddingVertical: 10 },
   refreshButton: {
     marginTop: 10,
     backgroundColor: palette.surface,
@@ -296,7 +299,8 @@ const styles = StyleSheet.create({
   },
   errorText: { color: '#c1121f' },
   deleteButton: {
-    width: 44,
+    width: 40,
+    paddingVertical: 10,
     backgroundColor: '#ffe5e5',
     borderWidth: 1,
     borderColor: '#f25f5c',

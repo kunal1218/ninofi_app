@@ -1030,18 +1030,24 @@ const mapVerificationSessionRow = (row = {}) => ({
   updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
 });
 
-const mapContractRow = (row = {}) => ({
+const mapContractRow = (row = {}, signatures = []) => ({
   id: row.id,
   projectId: row.project_id,
   createdBy: row.created_by,
-  title: row.title,
-  terms: row.terms,
-  status: row.status,
+  ownerId: row.owner_id,
+  title: row.title || '',
+  terms: row.terms || '',
+  status: row.status || 'pending',
   provider: row.provider || null,
   externalId: row.external_id || null,
   signedFileKey: row.signed_file_key || null,
   signedAt: row.signed_at instanceof Date ? row.signed_at.toISOString() : row.signed_at,
-  pdfUrl: row.pdf_url || null,
+  createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+  updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+  version: typeof row.version === 'number' ? row.version : row.version ? Number(row.version) : 1,
+  pdfUrl: row.pdf_url || '',
+  signatureCount: Number(row.signature_count ?? row.signatures_count ?? signatures.length ?? 0),
+  signatures,
 });
 
 const mapEscrowRow = (row = {}) => ({
@@ -1593,21 +1599,6 @@ const parseDateValue = (value, { fallbackToNow = true, asDateOnly = false } = {}
 };
 
 const CONTRACT_STATUSES = new Set(['pending', 'signed', 'rejected']);
-
-const mapContractRow = (row = {}, signatures = []) => ({
-  id: row.id,
-  projectId: row.project_id,
-  createdBy: row.created_by,
-  ownerId: row.owner_id,
-  title: row.title || '',
-  terms: row.terms || '',
-  status: row.status || 'pending',
-  createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
-  version: typeof row.version === 'number' ? row.version : row.version ? Number(row.version) : 1,
-  pdfUrl: row.pdf_url || '',
-  signatureCount: Number(row.signature_count ?? row.signatures_count ?? signatures.length ?? 0),
-  signatures,
-});
 
 const mapSignatureRow = (row = {}) => ({
   id: row.id,

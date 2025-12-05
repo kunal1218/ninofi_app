@@ -1229,6 +1229,31 @@ const ALLOWED_MIME_TYPES = [
 
 const isAllowedMime = (mime) => ALLOWED_MIME_TYPES.includes((mime || '').toLowerCase());
 
+const webhookSecret = process.env.PAYMENT_WEBHOOK_SECRET || 'stub-secret';
+
+const validatePaymentSignature = (headers, payloadString = '') => {
+  // Stub: replace with provider HMAC validation. For now, compare header to secret.
+  const signature = headers['x-provider-signature'] || headers['x-signature'] || '';
+  return signature === webhookSecret || webhookSecret === 'stub-secret';
+};
+
+const markInvoicePaid = async (client, milestoneId) => {
+  if (!milestoneId) return null;
+  const invoiceRes = await client.query('SELECT * FROM invoices WHERE milestone_id = $1 LIMIT 1', [milestoneId]);
+  if (!invoiceRes.rows.length) return null;
+  if ((invoiceRes.rows[0].status || '').toUpperCase() === 'PAID') return invoiceRes.rows[0];
+  const updated = await client.query(
+    `
+      UPDATE invoices
+      SET status = 'PAID', updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+    `,
+    [invoiceRes.rows[0].id]
+  );
+  return updated.rows[0];
+};
+
 const getAccountingConnection = async (contractorId, provider) => {
   if (!contractorId) return null;
   await assertDbReady();
@@ -3806,6 +3831,134 @@ app.post('/api/accounting/callback', async (req, res) => {
     await client.query('ROLLBACK').catch(() => {});
     console.error('accounting:callback:error', error);
     const message = pool ? 'Failed to complete accounting connection' : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  } finally {
+    client.release();
+  }
+});
+
+// Payment provider webhook handler
+app.post('/webhooks/payments', async (req, res) => {
+  const rawPayload = JSON.stringify(req.body || {});
+  if (!validatePaymentSignature(req.headers, rawPayload)) {
+    return res.status(401).json({ message: 'Invalid signature' });
+  }
+
+  const event = req.body || {};
+  const eventType = (event.type || '').toLowerCase();
+  const txnId = event.transactionId || event.id || null;
+  const externalId = event.externalId || event.providerId || null;
+  const status = (event.status || '').toLowerCase();
+
+  if (!txnId) {
+    return res.status(400).json({ message: 'transactionId is required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await assertDbReady();
+    await client.query('BEGIN');
+
+    const txRes = await client.query('SELECT * FROM payment_transactions WHERE id = $1 FOR UPDATE', [txnId]);
+    if (!txRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Transaction not found' });
+    }
+
+    const txRow = txRes.rows[0];
+    const isPayout = (txRow.type || '').toUpperCase() === 'PAYOUT';
+    const isDeposit = (txRow.type || '').toUpperCase() === 'DEPOSIT';
+
+    if (status === 'failed') {
+      await client.query(
+        `
+          UPDATE payment_transactions
+          SET status = 'failed', external_id = COALESCE($1, external_id), failure_reason = COALESCE($2, failure_reason)
+          WHERE id = $3
+        `,
+        [externalId, event.error || event.reason || 'Provider reported failure', txnId]
+      );
+      await client.query('COMMIT');
+      return res.json({ received: true });
+    }
+
+    const succeededEvent = status === 'succeeded' || status === 'completed' || eventType.includes('succeeded');
+    if (!succeededEvent) {
+      await client.query('ROLLBACK');
+      return res.json({ received: true });
+    }
+
+    if (txRow.status === 'completed') {
+      await client.query('ROLLBACK');
+      return res.json({ received: true });
+    }
+
+    // Mark transaction complete
+    const updatedTx = await client.query(
+      `
+        UPDATE payment_transactions
+        SET status = 'completed', external_id = COALESCE($1, external_id), failure_reason = NULL, provider = COALESCE(provider, $2)
+        WHERE id = $3
+        RETURNING *
+      `,
+      [externalId, event.provider || txRow.provider || null, txnId]
+    );
+
+    // On payout success, mark milestone paid and adjust escrow if this was previously pending
+    if (isPayout) {
+      const milestoneId = txRow.milestone_id;
+      if (milestoneId) {
+        await client.query(
+          `
+            UPDATE milestones
+            SET status = 'paid', paid_at = COALESCE(paid_at, NOW())
+            WHERE id = $1
+          `,
+          [milestoneId]
+        );
+        await markInvoicePaid(client, milestoneId);
+      }
+
+      // Adjust escrow only if this was not already completed
+      const escrowRow = await ensureEscrowAccount(client, { id: txRow.project_id, user_id: null });
+      const amountNum = txRow.amount !== null && txRow.amount !== undefined ? Number(txRow.amount) : 0;
+      if (amountNum && txRow.status !== 'completed') {
+        await client.query(
+          `
+            UPDATE escrow_accounts
+            SET available_balance = GREATEST(0, available_balance - $1),
+                total_released = total_released + $1,
+                updated_at = NOW()
+            WHERE project_id = $2
+          `,
+          [amountNum, txRow.project_id]
+        );
+      }
+    }
+
+    if (isDeposit) {
+      // Ensure deposit totals are reflected if previously pending
+      const amountNum = txRow.amount !== null && txRow.amount !== undefined ? Number(txRow.amount) : 0;
+      if (amountNum && txRow.status !== 'completed') {
+        await client.query(
+          `
+            UPDATE escrow_accounts
+            SET total_deposited = total_deposited + $1,
+                available_balance = available_balance + $1,
+                updated_at = NOW()
+            WHERE project_id = $2
+          `,
+          [amountNum, txRow.project_id]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    return res.json({ received: true, transaction: updatedTx.rows[0] });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('webhooks:payments:error', error);
+    const message = pool ? 'Failed to process webhook' : 'Database is not configured (set DATABASE_URL)';
     return res.status(500).json({ message });
   } finally {
     client.release();

@@ -255,6 +255,20 @@ class StubStorageService extends StorageService {
 
 const storageService = new StubStorageService();
 
+// Accounting integration (stub for QuickBooks/Xero)
+class AccountingIntegration {
+  async connectProvider(_contractorId, provider, _authCode) {
+    if (!provider) throw new Error('provider required');
+    return { provider, status: 'connected', expiresAt: new Date(Date.now() + 3600 * 1000).toISOString() };
+  }
+
+  async syncPayoutTransaction(_transactionId, provider) {
+    return { provider, synced: true };
+  }
+}
+
+const accountingIntegration = new AccountingIntegration();
+
 const ensureDefaultFeatureFlags = async () => {
   if (!pool) return;
   for (const flag of DEFAULT_FEATURE_FLAGS) {
@@ -431,6 +445,21 @@ const initDb = async () => {
   await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS invoices_milestone_idx ON invoices (milestone_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS invoices_project_idx ON invoices (project_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS invoices_status_idx ON invoices (status)');
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS contractor_accounting_connections (
+      contractor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      provider TEXT NOT NULL CHECK (provider IN ('QUICKBOOKS', 'XERO')),
+      access_token TEXT,
+      refresh_token TEXT,
+      expires_at TIMESTAMPTZ,
+      last_synced_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (contractor_id, provider)
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS accounting_connections_contractor_idx ON contractor_accounting_connections (contractor_id)');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS milestone_attachments (
@@ -1193,6 +1222,22 @@ const ALLOWED_MIME_TYPES = [
 ];
 
 const isAllowedMime = (mime) => ALLOWED_MIME_TYPES.includes((mime || '').toLowerCase());
+
+const getAccountingConnection = async (contractorId, provider) => {
+  if (!contractorId) return null;
+  await assertDbReady();
+  const params = [contractorId];
+  let where = 'contractor_id = $1';
+  if (provider) {
+    params.push(provider);
+    where += ` AND provider = $${params.length}`;
+  }
+  const res = await pool.query(
+    `SELECT * FROM contractor_accounting_connections WHERE ${where} ORDER BY updated_at DESC LIMIT 1`,
+    params
+  );
+  return res.rows[0] || null;
+};
 
 const isProjectParticipant = (participants, userId) => {
   if (!participants || !userId) return false;
@@ -3573,6 +3618,23 @@ app.post('/api/projects/:projectId/milestones/:milestoneId/approve', async (req,
     await generateInvoiceForMilestone(client, milestoneId, { markPaid: true, createStatus: 'PAID' });
 
     await client.query('COMMIT');
+
+    // Fire-and-forget accounting sync
+    try {
+      const connection = await getAccountingConnection(contractorToPay);
+      if (connection) {
+        accountingIntegration
+          .syncPayoutTransaction(payoutTxId, connection.provider)
+          .catch((err) => console.error('accounting:sync:error', err));
+        await pool.query(
+          'UPDATE contractor_accounting_connections SET last_synced_at = NOW() WHERE contractor_id = $1 AND provider = $2',
+          [contractorToPay, connection.provider]
+        ).catch(() => {});
+      }
+    } catch (syncErr) {
+      console.error('accounting:sync:dispatch:error', syncErr);
+    }
+
     return res.json({
       success: true,
       milestone: mapMilestoneRow(paid.rows[0] || approved.rows[0]),
@@ -3582,6 +3644,62 @@ app.post('/api/projects/:projectId/milestones/:milestoneId/approve', async (req,
     await client.query('ROLLBACK').catch(() => {});
     console.error('milestones:approve:error', error);
     const message = pool ? 'Failed to approve milestone' : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  } finally {
+    client.release();
+  }
+});
+
+// Connect contractor accounting provider (OAuth callback exchange stub)
+app.post('/api/accounting/connect', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { contractorId, provider, authCode } = req.body || {};
+    if (!contractorId || !provider || !authCode) {
+      return res.status(400).json({ message: 'contractorId, provider, and authCode are required' });
+    }
+
+    await assertDbReady();
+    const providerUpper = provider.toUpperCase();
+    if (!['QUICKBOOKS', 'XERO'].includes(providerUpper)) {
+      return res.status(400).json({ message: 'Invalid provider' });
+    }
+
+    let integrationResp;
+    try {
+      integrationResp = await accountingIntegration.connectProvider(contractorId, providerUpper, authCode);
+    } catch (err) {
+      console.error('accounting:connect:provider:error', err);
+      return res.status(502).json({ message: 'Provider connection failed' });
+    }
+
+    await client.query('BEGIN');
+    await client.query(
+      `
+        INSERT INTO contractor_accounting_connections (contractor_id, provider, access_token, refresh_token, expires_at, last_synced_at)
+        VALUES ($1, $2, $3, $4, $5, NULL)
+        ON CONFLICT (contractor_id, provider)
+        DO UPDATE SET
+          access_token = EXCLUDED.access_token,
+          refresh_token = EXCLUDED.refresh_token,
+          expires_at = EXCLUDED.expires_at,
+          updated_at = NOW()
+      `,
+      [
+        contractorId,
+        providerUpper,
+        integrationResp?.accessToken || null,
+        integrationResp?.refreshToken || null,
+        integrationResp?.expiresAt || null,
+      ]
+    );
+    await client.query('COMMIT');
+
+    return res.json({ success: true, connection: { provider: providerUpper, status: 'connected' } });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('accounting:connect:error', error);
+    const message = pool ? 'Failed to connect accounting provider' : 'Database is not configured (set DATABASE_URL)';
     return res.status(500).json({ message });
   } finally {
     client.release();

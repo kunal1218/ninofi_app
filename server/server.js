@@ -451,6 +451,14 @@ const initDb = async () => {
     "ALTER TABLE milestones ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending_funding'"
   );
   await pool.query("ALTER TABLE milestones ALTER COLUMN status SET DEFAULT 'pending_funding'");
+  await pool.query("ALTER TABLE milestones ADD COLUMN IF NOT EXISTS evidence JSONB DEFAULT '[]'::jsonb");
+  await pool.query("ALTER TABLE milestones ALTER COLUMN evidence SET DEFAULT '[]'::jsonb");
+  await pool.query("ALTER TABLE milestones ADD COLUMN IF NOT EXISTS notes TEXT");
+  await pool.query("ALTER TABLE milestones ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ");
+  await pool.query("ALTER TABLE milestones ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ");
+  await pool.query("ALTER TABLE milestones ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ");
+  await pool.query("ALTER TABLE milestones ADD COLUMN IF NOT EXISTS submitted_by UUID");
+  await pool.query("ALTER TABLE milestones ADD COLUMN IF NOT EXISTS approved_by UUID");
 
   await pool.query('CREATE INDEX IF NOT EXISTS projects_user_id_idx ON projects (user_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS milestones_project_id_idx ON milestones (project_id, position)');

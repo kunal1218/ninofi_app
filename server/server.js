@@ -1507,6 +1507,19 @@ const getProjectContractorIds = async (projectId) => {
   return contractorIds;
 };
 
+const isNonLaborContractorRole = (role = '') => {
+  const r = normalizeRole(role);
+  if (!r || r === 'laborer' || r === 'worker') return false;
+  return (
+    r.includes('contractor') ||
+    r.includes('subcontractor') ||
+    r.includes('foreman') ||
+    r.includes('manager') ||
+    r.includes('supervisor') ||
+    r.includes('lead')
+  );
+};
+
 const resolveMessageReceiver = (participants, memberIds, senderId, requestedReceiverId) => {
   if (!participants || !memberIds || !senderId) return null;
   if (requestedReceiverId && memberIds.has(requestedReceiverId)) {
@@ -5617,11 +5630,38 @@ app.delete('/api/contracts/:contractId', async (req, res) => {
       return res.status(409).json({ message: 'Only pending contracts can be deleted' });
     }
 
+    const participants = await getProjectParticipants(contractRow.project_id);
+    const personnelRows = await fetchProjectPersonnel(contractRow.project_id);
     const contractorIds = await getProjectContractorIds(contractRow.project_id);
-    const isOwner = contractRow.owner_id === userId;
-    const isCreator = contractRow.created_by === userId;
-    const isTeamContractor = contractorIds.has(userId);
-    if (!isOwner && !isCreator && !isTeamContractor) {
+
+    const ownerSideUsers = new Set();
+    if (participants?.ownerId) ownerSideUsers.add(participants.ownerId);
+    personnelRows.forEach((row) => {
+      const role = normalizeRole(row.personnel_role || row.role || '');
+      if (role === 'owner') {
+        ownerSideUsers.add(row.user_id);
+      }
+    });
+
+    const contractorTeam = new Set();
+    if (participants?.contractorId) contractorTeam.add(participants.contractorId);
+    personnelRows.forEach((row) => {
+      if (isNonLaborContractorRole(row.personnel_role || row.role || '')) {
+        contractorTeam.add(row.user_id);
+      }
+    });
+
+    const creatorIsOwnerSide = ownerSideUsers.has(contractRow.created_by);
+    const creatorIsContractorSide = contractorTeam.has(contractRow.created_by);
+
+    let authorized = false;
+    if (creatorIsOwnerSide) {
+      authorized = ownerSideUsers.has(userId);
+    } else if (creatorIsContractorSide) {
+      authorized = contractorTeam.has(userId);
+    }
+
+    if (!authorized) {
       return res.status(403).json({ message: 'Not authorized to delete this contract' });
     }
 

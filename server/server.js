@@ -594,23 +594,6 @@ const initDb = async () => {
   `);
 
   await pool.query(
-    'CREATE UNIQUE INDEX IF NOT EXISTS project_applications_unique ON project_applications (project_id, contractor_id)'
-  );
-  await pool.query(
-    'CREATE INDEX IF NOT EXISTS project_applications_project_id_idx ON project_applications (project_id)'
-  );
-  await pool.query(
-    'CREATE INDEX IF NOT EXISTS project_applications_contractor_id_idx ON project_applications (contractor_id)'
-  );
-  // Relax uniqueness to allow multiple worker posts per project while keeping contractor apps unique
-  await pool.query('DROP INDEX IF EXISTS project_applications_unique');
-  await pool.query(
-    "CREATE UNIQUE INDEX IF NOT EXISTS project_apps_unique_nonworker ON project_applications (project_id, contractor_id) WHERE is_worker_post = false"
-  );
-  await pool.query(
-    "CREATE UNIQUE INDEX IF NOT EXISTS project_apps_worker_apply_idx ON project_applications (worker_post_id, contractor_id) WHERE worker_post_id IS NOT NULL"
-  );
-  await pool.query(
     "ALTER TABLE project_applications ADD COLUMN IF NOT EXISTS is_worker_post BOOLEAN NOT NULL DEFAULT false"
   );
   await pool.query('ALTER TABLE project_applications ADD COLUMN IF NOT EXISTS work_date DATE');
@@ -619,6 +602,46 @@ const initDb = async () => {
   await pool.query('ALTER TABLE project_applications ADD COLUMN IF NOT EXISTS worker_post_id UUID');
   await pool.query(
     'CREATE INDEX IF NOT EXISTS project_applications_worker_post_idx ON project_applications (worker_post_id)'
+  );
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS project_applications_project_id_idx ON project_applications (project_id)'
+  );
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS project_applications_contractor_id_idx ON project_applications (contractor_id)'
+  );
+  // Drop old global unique index if present
+  await pool.query('DROP INDEX IF EXISTS project_applications_unique');
+  // Clean duplicate non-worker applications before creating partial unique index
+  await pool.query(`
+    DELETE FROM project_applications pa
+    WHERE pa.is_worker_post IS NOT TRUE
+      AND pa.ctid NOT IN (
+        SELECT ctid FROM (
+          SELECT ctid, ROW_NUMBER() OVER (PARTITION BY project_id, contractor_id ORDER BY created_at DESC) AS rn
+          FROM project_applications
+          WHERE is_worker_post IS NOT TRUE
+        ) d
+        WHERE d.rn = 1
+      )
+  `);
+  // Clean duplicate worker applications per gig
+  await pool.query(`
+    DELETE FROM project_applications pa
+    WHERE pa.worker_post_id IS NOT NULL
+      AND pa.ctid NOT IN (
+        SELECT ctid FROM (
+          SELECT ctid, ROW_NUMBER() OVER (PARTITION BY worker_post_id, contractor_id ORDER BY created_at DESC) AS rn
+          FROM project_applications
+          WHERE worker_post_id IS NOT NULL
+        ) d
+        WHERE d.rn = 1
+      )
+  `);
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS project_apps_unique_nonworker ON project_applications (project_id, contractor_id) WHERE is_worker_post = false"
+  );
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS project_apps_worker_apply_idx ON project_applications (worker_post_id, contractor_id) WHERE worker_post_id IS NOT NULL"
   );
 
   await pool.query(`

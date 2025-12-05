@@ -25,14 +25,16 @@ const WorkerGigsScreen = ({ navigation }) => {
     loadApplications();
   }, [loadApplications]);
 
+  const acceptedApps = apps.filter((a) => (a.status || '').toLowerCase() === 'accepted');
+  const acceptedIds = new Set(acceptedApps.map((a) => a.project_id || a.projectId).filter(Boolean));
+
   useFocusEffect(
     useCallback(() => {
       loadApplications();
     }, [loadApplications])
   );
 
-  const projects = (workerProjects || []).filter((p) => p);
-  const acceptedApps = apps.filter((a) => (a.status || '').toLowerCase() === 'accepted');
+  const projects = (workerProjects || []).filter((p) => p && acceptedIds.has(p.id));
   const cards = [];
   const seen = new Set();
   projects.forEach((p) => {

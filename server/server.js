@@ -602,6 +602,14 @@ const initDb = async () => {
   await pool.query(
     'CREATE INDEX IF NOT EXISTS project_applications_contractor_id_idx ON project_applications (contractor_id)'
   );
+  // Relax uniqueness to allow multiple worker posts per project while keeping contractor apps unique
+  await pool.query('DROP INDEX IF EXISTS project_applications_unique');
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS project_apps_unique_nonworker ON project_applications (project_id, contractor_id) WHERE is_worker_post = false"
+  );
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS project_apps_worker_apply_idx ON project_applications (worker_post_id, contractor_id) WHERE worker_post_id IS NOT NULL"
+  );
   await pool.query(
     "ALTER TABLE project_applications ADD COLUMN IF NOT EXISTS is_worker_post BOOLEAN NOT NULL DEFAULT false"
   );
@@ -2426,6 +2434,19 @@ app.post('/api/gigs/:gigId/apply', async (req, res) => {
       if (conflict.rows.length) {
         return res.status(409).json({ message: 'Date conflicts with another gig' });
       }
+    }
+
+    const existing = await client.query(
+      `
+        SELECT 1 FROM project_applications
+        WHERE worker_post_id = $1 AND contractor_id = $2
+          AND status IN ('pending','accepted')
+        LIMIT 1
+      `,
+      [gigId, workerId]
+    );
+    if (existing.rows.length) {
+      return res.status(409).json({ message: 'You already applied to this gig' });
     }
 
     const appId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');

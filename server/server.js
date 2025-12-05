@@ -1485,6 +1485,20 @@ const buildProjectMemberSet = async (projectId) => {
   return { participants, memberIds };
 };
 
+const getProjectContractorIds = async (projectId) => {
+  const participants = await getProjectParticipants(projectId);
+  const personnelRows = await fetchProjectPersonnel(projectId);
+  const contractorIds = new Set();
+  if (participants?.contractorId) contractorIds.add(participants.contractorId);
+  for (const row of personnelRows) {
+    const role = normalizeRole(row.personnel_role || row.role || '');
+    if (role.includes('contractor')) {
+      contractorIds.add(row.user_id);
+    }
+  }
+  return contractorIds;
+};
+
 const resolveMessageReceiver = (participants, memberIds, senderId, requestedReceiverId) => {
   if (!participants || !memberIds || !senderId) return null;
   if (requestedReceiverId && memberIds.has(requestedReceiverId)) {
@@ -5574,6 +5588,69 @@ app.get('/api/contracts/:contractId', async (req, res) => {
     logError('contracts:detail:error', { contractId: req.params?.contractId }, error);
     const message = pool
       ? 'Failed to fetch contract'
+      : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  }
+});
+
+app.delete('/api/contracts/:contractId', async (req, res) => {
+  try {
+    const { contractId } = req.params;
+    const { userId } = req.body || {};
+    if (!contractId || !userId) {
+      return res.status(400).json({ message: 'contractId and userId are required' });
+    }
+
+    const contractRow = await fetchContractWithProject(contractId);
+    if (!contractRow) {
+      return res.status(404).json({ message: 'Contract not found' });
+    }
+    if ((contractRow.status || '').toLowerCase() !== 'pending') {
+      return res.status(409).json({ message: 'Only pending contracts can be deleted' });
+    }
+
+    const contractorIds = await getProjectContractorIds(contractRow.project_id);
+    const isOwner = contractRow.owner_id === userId;
+    const isCreator = contractRow.created_by === userId;
+    const isTeamContractor = contractorIds.has(userId);
+    if (!isOwner && !isCreator && !isTeamContractor) {
+      return res.status(403).json({ message: 'Not authorized to delete this contract' });
+    }
+
+    const contractTitle = contractRow.title || 'Contract';
+    await pool.query('DELETE FROM contracts WHERE id = $1', [contractId]);
+
+    const notificationPromises = [];
+    contractorIds.forEach((cid) => {
+      const notifId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+      notificationPromises.push(
+        pool.query(
+          `
+            INSERT INTO notifications (id, user_id, title, body, data)
+            VALUES ($1, $2, $3, $4, $5)
+          `,
+          [
+            notifId,
+            cid,
+            'Contract deleted',
+            `${contractTitle} delete pending contract: ${contractTitle}`,
+            JSON.stringify({
+              type: 'contract-deleted',
+              contractId,
+              projectId: contractRow.project_id,
+              title: contractTitle,
+            }),
+          ]
+        )
+      );
+    });
+    await Promise.all(notificationPromises);
+
+    return res.json({ success: true });
+  } catch (error) {
+    logError('contracts:delete:error', { contractId: req.params?.contractId }, error);
+    const message = pool
+      ? 'Failed to delete contract'
       : 'Database is not configured (set DATABASE_URL)';
     return res.status(500).json({ message });
   }

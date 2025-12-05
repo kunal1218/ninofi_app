@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import palette from '../../styles/palette';
 import { projectAPI } from '../../services/api';
+import { removeWorkerProject } from '../../store/projectSlice';
 
 const WorkerGigsScreen = ({ navigation }) => {
+  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const { workerAssignments, workerProjects } = useSelector((state) => state.projects);
   const assignments = (workerAssignments || []).filter((a) => a.workerId === user?.id);
@@ -15,7 +17,31 @@ const WorkerGigsScreen = ({ navigation }) => {
     if (!user?.id) return;
     try {
       const res = await projectAPI.listGigApplications(user.id);
-      setApps(res.data || []);
+      const fetched = res.data || [];
+      const accepted = fetched.filter((a) => (a.status || '').toLowerCase() === 'accepted');
+      const acceptedIds = Array.from(
+        new Set(accepted.map((a) => a.project_id || a.projectId).filter(Boolean))
+      );
+
+      const invalid = new Set();
+      await Promise.all(
+        acceptedIds.map(async (pid) => {
+          try {
+            await projectAPI.getProjectDetails(pid);
+          } catch (err) {
+            const code = err?.response?.status;
+            if (code === 404) {
+              invalid.add(pid);
+              dispatch(removeWorkerProject(pid));
+            }
+          }
+        })
+      );
+
+      const filtered = invalid.size
+        ? fetched.filter((a) => !invalid.has(a.project_id || a.projectId))
+        : fetched;
+      setApps(filtered);
     } catch (err) {
       console.log('gigs:apps:error', err?.response?.data || err.message);
     }

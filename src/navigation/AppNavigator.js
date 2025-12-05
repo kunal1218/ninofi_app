@@ -52,6 +52,7 @@ import AdminModerationScreen from '../screens/admin/AdminModerationScreen';
 import ContractorSearchScreen from '../screens/homeowner/ContractorSearchScreen';
 import ContractorProfileScreen from '../screens/homeowner/ContractorProfileScreen';
 import AssignWorkScreen from '../screens/contractor/AssignWorkScreen';
+import PostWorkScreen from '../screens/contractor/PostWorkScreen';
 import { setAuthToken } from '../services/api';
 
 const RootStack = createStackNavigator();
@@ -203,6 +204,11 @@ const MainAppStack = () => (
         name="AssignWork"
         component={AssignWorkScreen}
         options={{ title: 'Assign Work' }}
+      />
+      <MainStack.Screen
+        name="PostWork"
+        component={PostWorkScreen}
+        options={{ title: 'Post Work' }}
       />
       <MainStack.Screen
         name="Portfolio"

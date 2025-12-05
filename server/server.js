@@ -2356,8 +2356,11 @@ app.post('/api/projects/:projectId/gigs', async (req, res) => {
     const project = await getProjectById(projectId);
     if (!project) return res.status(404).json({ message: 'Project not found' });
     const participants = await getProjectParticipants(projectId);
-    if (!participants || participants.contractorId !== contractorId) {
-      return res.status(403).json({ message: 'Only the assigned contractor can post work' });
+    const allowed =
+      !!participants &&
+      (participants.contractorId === contractorId || participants.ownerId === contractorId);
+    if (!allowed) {
+      return res.status(403).json({ message: 'Only the contractor on this project can post work' });
     }
     await client.query('BEGIN');
     const gigId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');

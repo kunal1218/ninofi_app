@@ -202,6 +202,14 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
               <Text style={styles.buttonText}>Edit</Text>
             </TouchableOpacity>
           ) : null}
+          {isContractor ? (
+            <TouchableOpacity
+              style={[styles.button, styles.contractButton]}
+              onPress={() => navigation.navigate('PostWork', { project, role })}
+            >
+              <Text style={styles.contractText}>Post Work</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {role !== 'worker' && (

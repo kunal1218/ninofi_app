@@ -5448,8 +5448,13 @@ app.post('/api/contracts', async (req, res) => {
     if (!project) {
       return res.status(404).json({ message: 'Project not found' });
     }
-    if (project.user_id !== createdBy) {
-      return res.status(403).json({ message: 'Only the project owner can create contracts' });
+    const assignedContractorId = await getAssignedContractorId(projectId);
+    const isOwner = project.user_id === createdBy;
+    const isAssignedContractor = assignedContractorId && assignedContractorId === createdBy;
+    if (!isOwner && !isAssignedContractor) {
+      return res
+        .status(403)
+        .json({ message: 'Only the project owner or assigned contractor can create contracts' });
     }
 
     const creator = await getUserById(createdBy);

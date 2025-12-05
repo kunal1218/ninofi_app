@@ -275,6 +275,32 @@ class AccountingIntegration {
 
 const accountingIntegration = new AccountingIntegration();
 
+// ID verification provider (stub)
+class IdVerificationProvider {
+  constructor() {
+    this.provider = 'stub-idp';
+  }
+
+  async startSession(user) {
+    const sessionId = `verify_${user?.id || crypto.randomUUID?.() || Date.now()}`;
+    return {
+      externalSessionId: sessionId,
+      clientToken: `token_${sessionId}`,
+      url: `https://verify.example.com/start?session=${sessionId}`,
+    };
+  }
+
+  async parseWebhook(payload) {
+    // Expect payload: { externalSessionId, status }
+    return {
+      externalSessionId: payload.externalSessionId || payload.id,
+      status: (payload.status || '').toUpperCase(),
+    };
+  }
+}
+
+const idVerificationProvider = new IdVerificationProvider();
+
 const ensureDefaultFeatureFlags = async () => {
   if (!pool) return;
   for (const flag of DEFAULT_FEATURE_FLAGS) {
@@ -303,6 +329,7 @@ const initDb = async () => {
       phone TEXT,
       role TEXT NOT NULL,
       password_hash TEXT,
+      is_verified BOOLEAN NOT NULL DEFAULT false,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
@@ -349,6 +376,12 @@ const initDb = async () => {
         WHERE attrelid = 'users'::regclass AND attname = 'rating'
       ) THEN
         ALTER TABLE users ADD COLUMN rating NUMERIC;
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_attribute
+        WHERE attrelid = 'users'::regclass AND attname = 'is_verified'
+      ) THEN
+        ALTER TABLE users ADD COLUMN is_verified BOOLEAN NOT NULL DEFAULT false;
       END IF;
     END
     $$;
@@ -480,6 +513,19 @@ const initDb = async () => {
     )
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS milestone_attachments_milestone_idx ON milestone_attachments (milestone_id)');
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS verification_sessions (
+      id UUID PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      provider TEXT NOT NULL,
+      external_session_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS verification_sessions_user_idx ON verification_sessions (user_id)');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS project_media (
@@ -943,6 +989,16 @@ const mapAttachmentRow = (row = {}) => ({
   createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
 });
 
+const mapVerificationSessionRow = (row = {}) => ({
+  id: row.id,
+  userId: row.user_id,
+  provider: row.provider,
+  externalSessionId: row.external_session_id,
+  status: (row.status || 'PENDING').toUpperCase(),
+  createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+  updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+});
+
 const mapEscrowRow = (row = {}) => ({
   id: row.id,
   projectId: row.project_id,
@@ -1268,6 +1324,13 @@ const getAccountingConnection = async (contractorId, provider) => {
     params
   );
   return res.rows[0] || null;
+};
+
+const isUserVerified = async (userId) => {
+  if (!userId) return false;
+  await assertDbReady();
+  const res = await pool.query('SELECT is_verified FROM users WHERE id = $1 LIMIT 1', [userId]);
+  return !!res.rows[0]?.is_verified;
 };
 
 const isProjectParticipant = (participants, userId) => {
@@ -3514,6 +3577,11 @@ app.post('/api/projects/:projectId/milestones/:milestoneId/approve', async (req,
       return res.status(400).json({ message: 'contractorId does not match assigned contractor' });
     }
 
+    const verified = await isUserVerified(contractorId || assignedContractorId);
+    if (!verified) {
+      return res.status(403).json({ message: 'Contractor is not verified' });
+    }
+
     await client.query('BEGIN');
     const milestoneRes = await client.query(
       'SELECT * FROM milestones WHERE id = $1 AND project_id = $2 FOR UPDATE',
@@ -3831,6 +3899,106 @@ app.post('/api/accounting/callback', async (req, res) => {
     await client.query('ROLLBACK').catch(() => {});
     console.error('accounting:callback:error', error);
     const message = pool ? 'Failed to complete accounting connection' : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  } finally {
+    client.release();
+  }
+});
+
+// Start ID verification session
+app.post('/api/verification/start', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { userId, provider } = req.body || {};
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required' });
+    }
+    await assertDbReady();
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const providerName = (provider || idVerificationProvider.provider || 'stub-idp').toUpperCase();
+    const session = await idVerificationProvider.startSession(user);
+    await client.query('BEGIN');
+    const sessionId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+    const inserted = await client.query(
+      `
+        INSERT INTO verification_sessions (id, user_id, provider, external_session_id, status)
+        VALUES ($1, $2, $3, $4, 'PENDING')
+        RETURNING *
+      `,
+      [sessionId, userId, providerName, session.externalSessionId]
+    );
+    await client.query('COMMIT');
+
+    return res.json({
+      success: true,
+      session: mapVerificationSessionRow(inserted.rows[0]),
+      clientToken: session.clientToken,
+      url: session.url,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('verification:start:error', error);
+    const message = pool ? 'Failed to start verification' : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  } finally {
+    client.release();
+  }
+});
+
+// Verification provider webhook/callback
+app.post('/webhooks/verification', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const parsed = await idVerificationProvider.parseWebhook(req.body || {});
+    const externalSessionId = parsed.externalSessionId;
+    const status = (parsed.status || '').toUpperCase();
+
+    if (!externalSessionId) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(400).json({ message: 'externalSessionId is required' });
+    }
+
+    await assertDbReady();
+    await client.query('BEGIN');
+    const sessionRes = await client.query(
+      'SELECT * FROM verification_sessions WHERE external_session_id = $1 FOR UPDATE',
+      [externalSessionId]
+    );
+    if (!sessionRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Verification session not found' });
+    }
+
+    const sessionRow = sessionRes.rows[0];
+    const finalStatus = ['APPROVED', 'DENIED'].includes(status) ? status : 'PENDING';
+
+    const updatedSession = await client.query(
+      `
+        UPDATE verification_sessions
+        SET status = $1, updated_at = NOW()
+        WHERE id = $2
+        RETURNING *
+      `,
+      [finalStatus, sessionRow.id]
+    );
+
+    if (finalStatus === 'APPROVED') {
+      await client.query(
+        'UPDATE users SET is_verified = TRUE WHERE id = $1',
+        [sessionRow.user_id]
+      );
+    }
+
+    await client.query('COMMIT');
+    return res.json({ success: true, session: mapVerificationSessionRow(updatedSession.rows[0]) });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('verification:webhook:error', error);
+    const message = pool ? 'Failed to process verification webhook' : 'Database is not configured (set DATABASE_URL)';
     return res.status(500).json({ message });
   } finally {
     client.release();

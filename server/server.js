@@ -2349,6 +2349,15 @@ app.post('/api/projects/:projectId/gigs', async (req, res) => {
   try {
     const { projectId } = req.params;
     const { contractorId, title, description, workDate, pay, tags = [] } = req.body || {};
+    logInfo('gigs:create:request', {
+      projectId,
+      contractorId,
+      hasTitle: !!title,
+      hasDescription: !!description,
+      workDate,
+      pay,
+      tags,
+    });
     if (!isUuid(projectId) || !isUuid(contractorId)) {
       return res.status(400).json({ message: 'Invalid projectId or contractorId' });
     }
@@ -2360,7 +2369,10 @@ app.post('/api/projects/:projectId/gigs', async (req, res) => {
       !!participants &&
       (participants.contractorId === contractorId || participants.ownerId === contractorId);
     if (!allowed) {
-      return res.status(403).json({ message: 'Only the contractor on this project can post work' });
+      logInfo('gigs:create:forbidden', { projectId, contractorId, participants });
+      return res
+        .status(403)
+        .json({ message: 'Only the contractor on this project can post work' });
     }
     await client.query('BEGIN');
     const gigId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');

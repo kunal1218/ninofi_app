@@ -11,7 +11,7 @@ const { runGeminiPrompt } = require('./geminiClient');
 require('dotenv').config();
 const asyncHandler = require('./utils/asyncHandler');
 const { ensureUuid } = require('./utils/validation');
-const { buildCenteredNameLine } = require('./utils/signatures');
+const { buildCenteredNameLine, applySignature, renderSignaturesSection } = require('./utils/signatures');
 
 const app = express();
 console.log('[server] Starting server...');
@@ -1947,55 +1947,11 @@ const extractBase64Payload = (raw = '') => {
   return data || '';
 };
 
-const escapeRegExp = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const replaceLineValue = (text = '', label = '', value = '') => {
-  if (!text || !label || !value) return text;
-  const pattern = new RegExp(`(${escapeRegExp(label)}\\s*:?)\\s*(.*)`, 'i');
-  if (!pattern.test(text)) return text;
-  return text.replace(pattern, (_, prefix) => `${prefix} ${value}`);
-};
-
-const replaceUnderlinedBlock = (text = '', label = '', value = '') => {
-  if (!text || !label || !value) return text;
-  const block = new RegExp(`(^\\s*_{3,}\\s*\\n\\s*${escapeRegExp(label)}\\b.*$)`, 'gim');
-  let replaced = false;
-  const updated = text.replace(block, (_match) => {
-    replaced = true;
-    return `${buildCenteredNameLine(value, 32, 3)}\n${label}`;
-  });
-  if (!replaced) {
-    // Fallback: inline replacement on the label line
-    return replaceLineValue(text, label, value);
-  }
-  return updated;
-};
-
-const fillSignatureLines = (text = '', role = '', { fullName = '' } = {}) => {
-  if (!text || !fullName) return text;
-  const firstName = fullName.trim().split(/\s+/)[0] || fullName.trim();
-  let updated = text;
-  const normalizedRole = normalizeRole(role);
-  if (normalizedRole === 'contractor') {
-    ['Contractor Signature'].forEach((label) => {
-      updated = replaceUnderlinedBlock(updated, label, firstName);
-      updated = replaceLineValue(updated, label, firstName);
-    });
-    ['Printed Name of Contractor', 'Contractor Printed Name/Company Name'].forEach((label) => {
-      updated = replaceUnderlinedBlock(updated, label, fullName);
-      updated = replaceLineValue(updated, label, fullName);
-    });
-  } else if (normalizedRole === 'homeowner') {
-    ['Homeowner Signature'].forEach((label) => {
-      updated = replaceUnderlinedBlock(updated, label, firstName);
-      updated = replaceLineValue(updated, label, firstName);
-    });
-    ['Homeowner Printed Name'].forEach((label) => {
-      updated = replaceUnderlinedBlock(updated, label, fullName);
-      updated = replaceLineValue(updated, label, fullName);
-    });
-  }
-  return updated;
+const stripExistingSignaturesSection = (text = '') => {
+  if (!text) return '';
+  const match = text.match(/(^|\n)\*\*Signatures\*\*/);
+  if (!match) return text.trimEnd();
+  return text.slice(0, match.index).trimEnd();
 };
 
 const persistMedia = async (projectId, mediaItems = []) => {
@@ -7506,15 +7462,34 @@ app.post('/api/projects/:projectId/contracts/:contractId/sign', async (req, res)
       [sigId, contractId, userId, signatureData, signerRoleValue]
     );
 
-    // Update contract text to reflect signature lines
-    let updatedText = contractResult.rows[0].contract_text || '';
-    if (signerUser?.full_name) {
-      updatedText = fillSignatureLines(updatedText, signerRoleValue, { fullName: signerUser.full_name });
-      await pool.query('UPDATE generated_contracts SET contract_text = $1 WHERE id = $2', [
-        updatedText,
-        contractId,
-      ]);
+    // Build signature state from all signatures on this contract
+    const sigRows = await pool.query(
+      `
+        SELECT gcs.*, u.full_name, u.role AS user_role
+        FROM generated_contract_signatures gcs
+        LEFT JOIN users u ON u.id = gcs.user_id
+        WHERE gcs.contract_id = $1
+      `,
+      [contractId]
+    );
+
+    let signatureState = {};
+    for (const row of sigRows.rows) {
+      const role = normalizeRole(row.signer_role || row.user_role || '');
+      if (!role) continue;
+      const fullName = row.full_name || '';
+      if (!fullName) continue;
+      signatureState = applySignature(signatureState, role === 'homeowner' ? 'homeowner' : 'contractor', fullName);
     }
+
+    // Update contract text to reflect signature lines
+    const baseText = stripExistingSignaturesSection(contractResult.rows[0].contract_text || '');
+    const updatedText =
+      baseText + '\n\n**Signatures**\n\n' + renderSignaturesSection(signatureState);
+    await pool.query('UPDATE generated_contracts SET contract_text = $1 WHERE id = $2', [
+      updatedText,
+      contractId,
+    ]);
 
     return res.status(201).json({
       signature: {

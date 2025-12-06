@@ -1957,14 +1957,21 @@ const replaceLineValue = (text = '', label = '', value = '') => {
 
 const replaceUnderlinedBlock = (text = '', label = '', value = '') => {
   if (!text || !label || !value) return text;
-  const block = new RegExp(`(^\\s*_{3,}.*\\n\\s*${escapeRegExp(label)}\\b.*$)`, 'gim');
-  return text.replace(block, (match) => {
+  const block = new RegExp(`(^\\s*_{3,}\\s*\\n\\s*${escapeRegExp(label)}\\b.*$)`, 'gim');
+  let replaced = false;
+  const updated = text.replace(block, (match) => {
+    replaced = true;
     const lines = match.split('\n');
     if (lines.length < 2) return match;
-    const underline = lines[0].replace(/\s+[^\s_].*$/, '').trimEnd();
-    const newUnderline = `${underline}  ${value}`;
-    return `${newUnderline}\n${lines[1]}`;
+    const underline = lines[0].trimEnd();
+    const newUnderline = `${underline} ${value}`.replace(/\s+$/, '');
+    return `${newUnderline}\n${lines[1].trimEnd()}`;
   });
+  if (!replaced) {
+    // Fallback: inline replacement on the label line
+    return replaceLineValue(text, label, value);
+  }
+  return updated;
 };
 
 const fillSignatureLines = (text = '', role = '', { fullName = '' } = {}) => {

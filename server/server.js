@@ -7254,7 +7254,7 @@ app.post('/api/projects/:projectId/contracts/propose', async (req, res) => {
       }
     }
 
-    const prompt = `
+  const prompt = `
 You are drafting a residential construction contract for a home renovation escrow platform.
 Use the following data:
 
@@ -7309,21 +7309,53 @@ ${contractText}
       }
     }
 
-    const id = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
-    const insert = await pool.query(
-      `
-        INSERT INTO generated_contracts (id, project_id, description, total_budget, currency, contract_text, created_by_user_id)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
-        RETURNING *
-      `,
-      [id, projectId, description.trim(), budgetNum, currency.trim(), contractText, userId || null]
-    );
+  const id = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+  const insert = await pool.query(
+    `
+      INSERT INTO generated_contracts (id, project_id, description, total_budget, currency, contract_text, created_by_user_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      RETURNING *
+    `,
+    [id, projectId, description.trim(), budgetNum, currency.trim(), contractText, userId || null]
+  );
 
-    const row = insert.rows[0];
-    return res.status(201).json({
-      id: row.id,
-      projectId,
-      description: row.description,
+  // Notify the non-creator participant (owner or contractor) to sign
+  try {
+    const participants = await getProjectParticipants(projectId);
+    const contractorId = participants?.contractorId || (await getAssignedContractorId(projectId));
+    const targetIds = new Set();
+    if (participants?.ownerId && participants.ownerId !== userId) targetIds.add(participants.ownerId);
+    if (contractorId && contractorId !== userId) targetIds.add(contractorId);
+    for (const targetId of targetIds) {
+      const notifId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+      await pool.query(
+        `
+          INSERT INTO notifications (id, user_id, title, body, data)
+          VALUES ($1, $2, $3, $4, $5)
+        `,
+        [
+          notifId,
+          targetId,
+          'New contract to sign',
+          `${description.trim() || 'A contract'} is ready for your signature.`,
+          JSON.stringify({
+            type: 'contract-created',
+            projectId,
+            contractId: id,
+            contractTitle: description.trim() || 'Contract',
+          }),
+        ]
+      );
+    }
+  } catch (notifErr) {
+    logError('contracts:propose:notify:error', { projectId }, notifErr);
+  }
+
+  const row = insert.rows[0];
+  return res.status(201).json({
+    id: row.id,
+    projectId,
+    description: row.description,
       totalBudget: Number(row.total_budget),
       currency: row.currency,
       contractText,

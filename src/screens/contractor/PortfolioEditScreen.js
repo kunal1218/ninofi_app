@@ -61,6 +61,10 @@ const PortfolioEditScreen = ({ route, navigation }) => {
     ]);
   };
 
+  const removeMedia = (mediaId) => {
+    setMedia((prev) => prev.filter((item) => (item.id || item.url) !== mediaId));
+  };
+
   const handleSave = async () => {
     if (!user?.id) return;
     setSaving(true);
@@ -144,13 +148,23 @@ const PortfolioEditScreen = ({ route, navigation }) => {
               <Text style={styles.primaryText}>+ Add photo</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ gap: 10 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 10 }}
+          >
             {media.length ? (
-              media.map((m) => (
-                <View key={m.id} style={styles.mediaItem}>
-                  <Image source={{ uri: m.url }} style={styles.mediaImg} />
-                </View>
-              ))
+              media.map((m) => {
+                const mediaKey = m.id || m.url;
+                return (
+                  <View key={mediaKey} style={styles.mediaItem}>
+                    <Image source={{ uri: m.url }} style={styles.mediaImg} />
+                    <TouchableOpacity style={styles.removeButton} onPress={() => removeMedia(mediaKey)}>
+                      <Text style={styles.removeText}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
             ) : (
               <Text style={styles.muted}>No photos yet.</Text>
             )}
@@ -203,6 +217,8 @@ const styles = StyleSheet.create({
   muted: { color: palette.muted },
   mediaItem: { width: 140, marginRight: 12 },
   mediaImg: { width: 140, height: 110, borderRadius: 14, backgroundColor: '#EEF2FF' },
+  removeButton: { marginTop: 8, alignSelf: 'flex-start' },
+  removeText: { color: palette.error, fontWeight: '700' },
   primaryButton: {
     backgroundColor: palette.primary,
     padding: 16,

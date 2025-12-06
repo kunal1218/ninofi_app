@@ -6869,19 +6869,29 @@ app.get('/api/contractors/:contractorId/portfolio', async (req, res) => {
 
 app.post('/api/portfolio', async (req, res) => {
   try {
-    const { contractorId, title, bio, specialties = [], hourlyRate, serviceArea, media = [] } =
-      req.body || {};
+    const {
+      contractorId,
+      title,
+      bio,
+      specialties = [],
+      hourlyRate,
+      serviceArea,
+      media: mediaFromRequest,
+    } = req.body || {};
     if (!contractorId) {
       return res.status(400).json({ message: 'contractorId is required' });
     }
     await assertDbReady();
+    const hasMedia = Array.isArray(mediaFromRequest);
+    const media = hasMedia ? mediaFromRequest : [];
 
     const existing = await pool.query('SELECT * FROM portfolios WHERE contractor_id = $1', [
       contractorId,
     ]);
     const portfolioId =
       existing.rows[0]?.id || crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
-    const savedMedia = media?.length ? await persistPortfolioMedia(portfolioId, media) : [];
+    const savedMedia =
+      hasMedia && media.length ? await persistPortfolioMedia(portfolioId, media) : [];
 
     if (existing.rows.length) {
       await pool.query(
@@ -6910,13 +6920,17 @@ app.post('/api/portfolio', async (req, res) => {
       );
     }
 
-    if (savedMedia.length) {
-      for (const item of savedMedia) {
-        const id = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
-        await pool.query(
-          'INSERT INTO portfolio_media (id, portfolio_id, type, url, caption) VALUES ($1,$2,$3,$4,$5)',
-          [id, portfolioId, item.type || 'general', item.url, item.caption || '']
-        );
+    if (hasMedia) {
+      await pool.query('DELETE FROM portfolio_media WHERE portfolio_id = $1', [portfolioId]);
+
+      if (savedMedia.length) {
+        for (const item of savedMedia) {
+          const id = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+          await pool.query(
+            'INSERT INTO portfolio_media (id, portfolio_id, type, url, caption) VALUES ($1,$2,$3,$4,$5)',
+            [id, portfolioId, item.type || 'general', item.url, item.caption || '']
+          );
+        }
       }
     }
 

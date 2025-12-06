@@ -1955,6 +1955,15 @@ const replaceLineValue = (text = '', label = '', value = '') => {
   return text.replace(pattern, (_, prefix) => `${prefix} ${value}`);
 };
 
+const buildUnderlineWithValue = (value = '', totalWidth = 46) => {
+  const trimmed = value.trim();
+  if (!trimmed) return '_'.repeat(totalWidth);
+  const padding = Math.max(totalWidth - trimmed.length - 2, 4);
+  const left = Math.floor(padding / 2);
+  const right = padding - left;
+  return `${'_'.repeat(left)} ${trimmed} ${'_'.repeat(right)}`.trimEnd();
+};
+
 const replaceUnderlinedBlock = (text = '', label = '', value = '') => {
   if (!text || !label || !value) return text;
   const block = new RegExp(`(^\\s*_{3,}\\s*\\n\\s*${escapeRegExp(label)}\\b.*$)`, 'gim');
@@ -1963,9 +1972,8 @@ const replaceUnderlinedBlock = (text = '', label = '', value = '') => {
     replaced = true;
     const lines = match.split('\n');
     if (lines.length < 2) return match;
-    const underline = lines[0].trimEnd();
-    const newUnderline = `${underline} ${value}`.replace(/\s+$/, '');
-    return `${newUnderline}\n${lines[1].trimEnd()}`;
+    const underline = buildUnderlineWithValue(value);
+    return `${underline}\n${lines[1].trimEnd()}`;
   });
   if (!replaced) {
     // Fallback: inline replacement on the label line

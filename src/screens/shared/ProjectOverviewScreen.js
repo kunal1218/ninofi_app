@@ -500,12 +500,6 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
                 <View style={styles.contractBody}>
                   <Text style={styles.contractTextBody}>{viewing?.contractText || ''}</Text>
                 </View>
-                {!isContractor && role === 'homeowner' ? null : null}
-                {proposedContracts.find((c) => c.id === viewing?.id) ? (
-                  <TouchableOpacity style={styles.secondaryButton} onPress={() => startEditContract(viewing)}>
-                    <Text style={styles.secondaryText}>Edit</Text>
-                  </TouchableOpacity>
-                ) : null}
                 <View style={styles.signatureBlock}>
                   <Text style={styles.sectionTitle}>Signatures</Text>
                   {(viewing?.signatures || []).map((sig) => (
@@ -526,38 +520,36 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
                     if (!user?.id || !hasSignatureSection || alreadySigned) {
                       return null;
                     }
+                    const actions = [];
+                    if (isOwnerUser) {
+                      actions.push('Sign as Homeowner');
+                    }
+                    if (isContractorUser) {
+                      actions.push('Sign as Contractor');
+                    }
                     return (
                       <View style={styles.signatureButtons}>
-                        {isOwnerUser ? (
-                          <TouchableOpacity
-                            style={[styles.primaryButton, styles.flex1, isSigning && styles.disabled]}
-                            disabled={isSigning}
-                            onPress={() => handleSignGenerated('homeowner')}
+                        {actions.map((label, idx) => (
+                          <Text
+                            key={idx}
+                            style={styles.signatureText}
+                            onPress={() =>
+                              label.includes('Homeowner')
+                                ? handleSignGenerated('homeowner')
+                                : handleSignGenerated('contractor')
+                            }
                           >
-                            <Text style={styles.primaryText}>
-                              {isSigning ? 'Signing…' : 'Sign as Homeowner'}
-                            </Text>
-                          </TouchableOpacity>
-                        ) : null}
-                        {isContractorUser ? (
-                          <TouchableOpacity
-                            style={[styles.secondaryButton, styles.flex1, isSigning && styles.disabled]}
-                            disabled={isSigning}
-                            onPress={() => handleSignGenerated('contractor')}
-                          >
-                            <Text style={styles.secondaryText}>
-                              {isSigning ? 'Signing…' : 'Sign as Contractor'}
-                            </Text>
-                          </TouchableOpacity>
-                        ) : null}
+                            {isSigning ? 'Signing…' : label}
+                          </Text>
+                        ))}
                       </View>
                     );
                   })()}
                 </View>
-        <TouchableOpacity style={styles.secondaryButton}>
-          <Text style={styles.secondaryText}>Download as PDF (coming soon)</Text>
-        </TouchableOpacity>
-      </>
+                <TouchableOpacity style={styles.secondaryButton}>
+                  <Text style={styles.secondaryText}>Download as PDF (coming soon)</Text>
+                </TouchableOpacity>
+              </>
     )}
           </ScrollView>
         </SafeAreaView>

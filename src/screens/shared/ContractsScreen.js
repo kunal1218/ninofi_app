@@ -110,7 +110,7 @@ const ContractsScreen = ({ navigation }) => {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Signed Contracts</Text>
+        <Text style={styles.headerTitle}>My Contracts</Text>
         <View style={styles.headerSpacer} />
       </View>
       <ScrollView
@@ -119,7 +119,7 @@ const ContractsScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Signed Contracts</Text>
+          <Text style={styles.title}>My Contracts</Text>
         </View>
 
         {isLoading && <Text style={styles.muted}>Loading contracts...</Text>}

@@ -7499,9 +7499,7 @@ app.put('/api/projects/:projectId/contracts/:contractId', async (req, res) => {
       fields.push(`currency = $${idx++}`);
       values.push(currency);
     }
-    fields.push(`updated_at = NOW()`);
-
-    if (fields.length === 1) {
+    if (!fields.length) {
       return res.status(400).json({ message: 'No update fields provided' });
     }
 

@@ -83,7 +83,13 @@ const getStripeClient = () => {
     throw new Error('STRIPE_SECRET_KEY env var is not set');
   }
   if (!stripeClient) {
-    stripeClient = require('stripe')(secret);
+    try {
+      const stripe = require('stripe');
+      stripeClient = stripe(secret);
+    } catch (err) {
+      console.error('stripe:init:error', err);
+      throw new Error('Stripe SDK is not installed on the server');
+    }
   }
   return stripeClient;
 };

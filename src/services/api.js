@@ -178,9 +178,9 @@ export const projectAPI = {
 
 export const paymentsAPI = {
   createStripeAccountLink: async (contractorId) =>
-    api.post('/stripe/connect/account-link', { contractorId }),
+    api.post('/stripe/connect/account-link', { contractorId, userId: contractorId }),
   getStripeStatus: async (contractorId) =>
-    api.get('/stripe/connect/status', { params: { contractorId } }),
+    api.get('/stripe/connect/status', { params: { contractorId, userId: contractorId } }),
 };
 
 export const messageAPI = {

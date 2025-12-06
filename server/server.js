@@ -102,14 +102,15 @@ app.use(cors());
 // Stripe webhooks require the raw body, so bypass JSON parsing for that route only.
 const jsonParser = express.json({ limit: '20mb' });
 const urlEncodedParser = express.urlencoded({ extended: true, limit: '20mb' });
+const RAW_WEBHOOK_PATHS = ['/webhooks/stripe', '/api/stripe/webhook']; // support legacy + current
 app.use((req, res, next) => {
-  if (req.originalUrl && req.originalUrl.startsWith('/api/stripe/webhook')) {
+  if (req.originalUrl && RAW_WEBHOOK_PATHS.some((p) => req.originalUrl.startsWith(p))) {
     return next();
   }
   return jsonParser(req, res, next);
 });
 app.use((req, res, next) => {
-  if (req.originalUrl && req.originalUrl.startsWith('/api/stripe/webhook')) {
+  if (req.originalUrl && RAW_WEBHOOK_PATHS.some((p) => req.originalUrl.startsWith(p))) {
     return next();
   }
   return urlEncodedParser(req, res, next);
@@ -4702,9 +4703,12 @@ app.post('/api/accounting/callback', async (req, res) => {
 app.post('/api/stripe/connect/account-link', async (req, res) => {
   const client = await pool.connect();
   try {
-    const { contractorId } = req.body || {};
+    const { contractorId, userId } = req.body || {};
     if (!contractorId || !isUuid(contractorId)) {
       return res.status(400).json({ message: 'contractorId is required' });
+    }
+    if (!userId || userId !== contractorId) {
+      return res.status(403).json({ message: 'Not authorized' });
     }
     await assertDbReady();
     const userRow = await getUserById(contractorId);
@@ -4749,6 +4753,8 @@ app.post('/api/stripe/connect/account-link', async (req, res) => {
       accountId,
       chargesEnabled: !!userRow.stripe_charges_enabled,
       payoutsEnabled: !!userRow.stripe_payouts_enabled,
+      charges_enabled: !!userRow.stripe_charges_enabled,
+      payouts_enabled: !!userRow.stripe_payouts_enabled,
     });
   } catch (error) {
     console.error('stripe:connect:error', error);
@@ -4762,20 +4768,27 @@ app.post('/api/stripe/connect/account-link', async (req, res) => {
 // Stripe Connect: fetch current status for a contractor
 app.get('/api/stripe/connect/status', async (req, res) => {
   try {
-    const { contractorId } = req.query || {};
+    const { contractorId, userId } = req.query || {};
     if (!contractorId || !isUuid(contractorId)) {
       return res.status(400).json({ message: 'contractorId is required' });
+    }
+    if (!userId || userId !== contractorId) {
+      return res.status(403).json({ message: 'Not authorized' });
     }
     await assertDbReady();
     const userRow = await getUserById(contractorId);
     if (!userRow || (userRow.role || '').toLowerCase() !== 'contractor') {
       return res.status(404).json({ message: 'Contractor not found' });
     }
+    const chargesEnabled = !!userRow.stripe_charges_enabled;
+    const payoutsEnabled = !!userRow.stripe_payouts_enabled;
     return res.json({
       success: true,
       accountId: userRow.stripe_account_id || null,
-      chargesEnabled: !!userRow.stripe_charges_enabled,
-      payoutsEnabled: !!userRow.stripe_payouts_enabled,
+      chargesEnabled,
+      payoutsEnabled,
+      charges_enabled: chargesEnabled,
+      payouts_enabled: payoutsEnabled,
     });
   } catch (error) {
     console.error('stripe:status:error', error);
@@ -4829,7 +4842,7 @@ app.post('/api/verification/start', async (req, res) => {
 });
 
 // Stripe webhook listener for Connect account updates
-app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+const handleStripeWebhook = async (req, res) => {
   let event = req.body;
   try {
     const signature = req.headers['stripe-signature'];
@@ -4849,28 +4862,46 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 
   try {
     await assertDbReady();
-    if (event?.type === 'account.updated' && event.data?.object) {
-      const account = event.data.object;
-      const accountId = account.id;
-      const chargesEnabled = !!account.charges_enabled;
-      const payoutsEnabled = !!account.payouts_enabled;
-      await pool.query(
-        `
-          UPDATE users
-          SET stripe_charges_enabled = $1,
-              stripe_payouts_enabled = $2,
-              stripe_account_id = COALESCE(stripe_account_id, $3)
-          WHERE stripe_account_id = $3
-        `,
-        [chargesEnabled, payoutsEnabled, accountId]
-      );
+    switch (event?.type) {
+      case 'account.updated': {
+        if (event.data?.object) {
+          const account = event.data.object;
+          const accountId = account.id;
+          const chargesEnabled = !!account.charges_enabled;
+          const payoutsEnabled = !!account.payouts_enabled;
+          await pool.query(
+            `
+              UPDATE users
+              SET stripe_charges_enabled = $1,
+                  stripe_payouts_enabled = $2,
+                  stripe_account_id = COALESCE(stripe_account_id, $3)
+              WHERE stripe_account_id = $3
+            `,
+            [chargesEnabled, payoutsEnabled, accountId]
+          );
+        }
+        break;
+      }
+      case 'payment_intent.succeeded':
+      case 'payment_intent.payment_failed':
+      case 'transfer.created':
+      case 'balance.available':
+      case 'payout.paid':
+      case 'payout.failed':
+        // Supported but unused events; acknowledge to avoid retries.
+        break;
+      default:
+        // Ignore other events
+        break;
     }
     return res.json({ received: true });
   } catch (error) {
     console.error('stripe:webhook:error', error);
     return res.status(500).json({ message: 'Failed to process webhook' });
   }
-});
+};
+app.post('/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook); // legacy path
 
 // Verification provider webhook/callback
 app.post('/webhooks/verification', async (req, res) => {

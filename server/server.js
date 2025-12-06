@@ -1955,17 +1955,41 @@ const replaceLineValue = (text = '', label = '', value = '') => {
   return text.replace(pattern, (_, prefix) => `${prefix} ${value}`);
 };
 
+const replaceUnderlinedBlock = (text = '', label = '', value = '') => {
+  if (!text || !label || !value) return text;
+  const block = new RegExp(`(^\\s*_{3,}.*\\n\\s*${escapeRegExp(label)}\\b.*$)`, 'gim');
+  return text.replace(block, (match) => {
+    const lines = match.split('\n');
+    if (lines.length < 2) return match;
+    const underline = lines[0].replace(/\s+[^\s_].*$/, '').trimEnd();
+    const newUnderline = `${underline}  ${value}`;
+    return `${newUnderline}\n${lines[1]}`;
+  });
+};
+
 const fillSignatureLines = (text = '', role = '', { fullName = '' } = {}) => {
   if (!text || !fullName) return text;
   const firstName = fullName.trim().split(/\s+/)[0] || fullName.trim();
   let updated = text;
   const normalizedRole = normalizeRole(role);
   if (normalizedRole === 'contractor') {
-    updated = replaceLineValue(updated, 'Contractor Signature', firstName);
-    updated = replaceLineValue(updated, 'Printed Name of Contractor', fullName);
+    ['Contractor Signature'].forEach((label) => {
+      updated = replaceUnderlinedBlock(updated, label, firstName);
+      updated = replaceLineValue(updated, label, firstName);
+    });
+    ['Printed Name of Contractor', 'Contractor Printed Name/Company Name'].forEach((label) => {
+      updated = replaceUnderlinedBlock(updated, label, fullName);
+      updated = replaceLineValue(updated, label, fullName);
+    });
   } else if (normalizedRole === 'homeowner') {
-    updated = replaceLineValue(updated, 'Homeowner Signature', firstName);
-    updated = replaceLineValue(updated, 'Printed Name of Homeowner', fullName);
+    ['Homeowner Signature'].forEach((label) => {
+      updated = replaceUnderlinedBlock(updated, label, firstName);
+      updated = replaceLineValue(updated, label, firstName);
+    });
+    ['Homeowner Printed Name'].forEach((label) => {
+      updated = replaceUnderlinedBlock(updated, label, fullName);
+      updated = replaceLineValue(updated, label, fullName);
+    });
   }
   return updated;
 };

@@ -11,6 +11,7 @@ const { runGeminiPrompt } = require('./geminiClient');
 require('dotenv').config();
 const asyncHandler = require('./utils/asyncHandler');
 const { ensureUuid } = require('./utils/validation');
+const { buildCenteredNameLine } = require('./utils/signatures');
 
 const app = express();
 console.log('[server] Starting server...');
@@ -1955,25 +1956,13 @@ const replaceLineValue = (text = '', label = '', value = '') => {
   return text.replace(pattern, (_, prefix) => `${prefix} ${value}`);
 };
 
-const buildUnderlineWithValue = (value = '', totalWidth = 46) => {
-  const trimmed = value.trim();
-  if (!trimmed) return '_'.repeat(totalWidth);
-  const padding = Math.max(totalWidth - trimmed.length - 2, 4);
-  const left = Math.floor(padding / 2);
-  const right = padding - left;
-  return `${'_'.repeat(left)} ${trimmed} ${'_'.repeat(right)}`.trimEnd();
-};
-
 const replaceUnderlinedBlock = (text = '', label = '', value = '') => {
   if (!text || !label || !value) return text;
   const block = new RegExp(`(^\\s*_{3,}\\s*\\n\\s*${escapeRegExp(label)}\\b.*$)`, 'gim');
   let replaced = false;
-  const updated = text.replace(block, (match) => {
+  const updated = text.replace(block, (_match) => {
     replaced = true;
-    const lines = match.split('\n');
-    if (lines.length < 2) return match;
-    const underline = buildUnderlineWithValue(value);
-    return `${underline}\n${lines[1].trimEnd()}`;
+    return `${buildCenteredNameLine(value, 32, 3)}\n${label}`;
   });
   if (!replaced) {
     // Fallback: inline replacement on the label line

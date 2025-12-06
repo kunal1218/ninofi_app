@@ -1,48 +1,49 @@
-export type SignatureInfo = {
-  homeownerName: string;
-  contractorName: string;
-};
+/**
+ * @typedef {Object} SignatureInfo
+ * @property {string} homeownerName
+ * @property {string} contractorName
+ */
 
 /**
  * Build an underscore-padded line with the name centered.
  * - totalLength defaults to 32
  * - minPadding defaults to 3 underscores per side
  * - If the name cannot fit with the minimum padding, falls back to "___name___"
+ * @param {string} name
+ * @param {number} [totalLength=32]
+ * @param {number} [minPadding=3]
+ * @returns {string}
  */
-export function buildCenteredNameLine(
-  name: string,
-  totalLength = 32,
-  minPadding = 3
-): string {
-  const safeName = (name ?? '').replace(/\s+/g, '');
+function buildCenteredNameLine(name, totalLength = 32, minPadding = 3) {
+  const rawName = name ?? '';
+  const trimmed = rawName.replace(/\s+/g, '');
 
-  if (!safeName) {
+  if (!trimmed) {
     return '_'.repeat(totalLength);
   }
 
-  // If the name is too long to allow minPadding on both sides, fallback.
-  if (safeName.length > totalLength - 2 * minPadding) {
-    return `___${safeName}___`;
+  if (trimmed.length > totalLength - 2 * minPadding) {
+    return `___${trimmed}___`;
   }
 
-  const available = totalLength - safeName.length;
+  const available = totalLength - trimmed.length;
   const left = Math.floor(available / 2);
   const right = available - left;
 
   if (left < minPadding || right < minPadding) {
-    return `___${safeName}___`;
+    return `___${trimmed}___`;
   }
 
-  return `${'_'.repeat(left)}${safeName}${'_'.repeat(right)}`;
+  return `${'_'.repeat(left)}${trimmed}${'_'.repeat(right)}`;
 }
 
 /**
  * Append a formatted Signatures section to the contract markdown.
+ * @param {string} contractMarkdown
+ * @param {SignatureInfo} signatures
+ * @returns {string}
  */
-export function appendSignaturesSection(
-  contractMarkdown: string,
-  signatures: SignatureInfo
-): string {
+function appendSignaturesSection(contractMarkdown, signatures) {
   const lines = [
     contractMarkdown.trimEnd(),
     '',
@@ -57,6 +58,11 @@ export function appendSignaturesSection(
 
   return lines.join('\n');
 }
+
+module.exports = {
+  buildCenteredNameLine,
+  appendSignaturesSection,
+};
 
 // Demo
 console.log(buildCenteredNameLine('Kunal'));

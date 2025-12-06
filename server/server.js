@@ -4764,8 +4764,19 @@ app.post('/api/stripe/connect/account-link', async (req, res) => {
     });
   } catch (error) {
     console.error('stripe:connect:error', error);
-    const message = error?.message || 'Failed to create Stripe account link';
-    return res.status(500).json({ message });
+    const messageText = error?.message || 'Failed to create Stripe account link';
+    if (
+      error?.type === 'StripeInvalidRequestError' &&
+      messageText.includes("signed up for Connect")
+    ) {
+      return res
+        .status(502)
+        .json({
+          message:
+            'Stripe Connect is not enabled for this platform key. Add a Connect-enabled secret key to STRIPE_SECRET_KEY and retry.',
+        });
+    }
+    return res.status(500).json({ message: messageText });
   } finally {
     client.release();
   }

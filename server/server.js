@@ -46,6 +46,10 @@ const ENV_VARIABLES = [
   { key: 'RAILWAY_PROJECT_ID', label: 'Railway project id' },
   { key: 'RAILWAY_SERVICE_NAME', label: 'Railway service name' },
   { key: 'RAILWAY_STATIC_URL', label: 'Railway static URL' },
+  { key: 'STRIPE_SECRET_KEY', label: 'Stripe secret key (Connect Standard)' },
+  { key: 'STRIPE_WEBHOOK_SECRET', label: 'Stripe webhook signing secret' },
+  { key: 'STRIPE_ONBOARDING_RETURN_URL', label: 'Stripe onboarding return URL' },
+  { key: 'STRIPE_ONBOARDING_REFRESH_URL', label: 'Stripe onboarding refresh URL' },
 ];
 
 const SERVER_START_TIME = Date.now();
@@ -72,9 +76,44 @@ const logError = (tag, payload, error) => {
   }
 };
 
+let stripeClient = null;
+const getStripeClient = () => {
+  const secret = process.env.STRIPE_SECRET_KEY;
+  if (!secret) {
+    throw new Error('STRIPE_SECRET_KEY env var is not set');
+  }
+  if (!stripeClient) {
+    stripeClient = require('stripe')(secret);
+  }
+  return stripeClient;
+};
+
+const STRIPE_RETURN_URL =
+  process.env.STRIPE_ONBOARDING_RETURN_URL ||
+  process.env.RAILWAY_STATIC_URL ||
+  'https://example.com/stripe/return';
+const STRIPE_REFRESH_URL =
+  process.env.STRIPE_ONBOARDING_REFRESH_URL ||
+  process.env.RAILWAY_STATIC_URL ||
+  'https://example.com/stripe/refresh';
+
 app.use(cors());
-app.use(express.json({ limit: '20mb' }));
-app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
+// Stripe webhooks require the raw body, so bypass JSON parsing for that route only.
+const jsonParser = express.json({ limit: '20mb' });
+const urlEncodedParser = express.urlencoded({ extended: true, limit: '20mb' });
+app.use((req, res, next) => {
+  if (req.originalUrl && req.originalUrl.startsWith('/api/stripe/webhook')) {
+    return next();
+  }
+  return jsonParser(req, res, next);
+});
+app.use((req, res, next) => {
+  if (req.originalUrl && req.originalUrl.startsWith('/api/stripe/webhook')) {
+    return next();
+  }
+  return urlEncodedParser(req, res, next);
+});
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 app.use('/uploads', express.static(UPLOAD_DIR));
 
@@ -416,6 +455,24 @@ const initDb = async () => {
         WHERE attrelid = 'users'::regclass AND attname = 'is_verified'
       ) THEN
         ALTER TABLE users ADD COLUMN is_verified BOOLEAN NOT NULL DEFAULT false;
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_attribute
+        WHERE attrelid = 'users'::regclass AND attname = 'stripe_account_id'
+      ) THEN
+        ALTER TABLE users ADD COLUMN stripe_account_id TEXT;
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_attribute
+        WHERE attrelid = 'users'::regclass AND attname = 'stripe_charges_enabled'
+      ) THEN
+        ALTER TABLE users ADD COLUMN stripe_charges_enabled BOOLEAN NOT NULL DEFAULT false;
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_attribute
+        WHERE attrelid = 'users'::regclass AND attname = 'stripe_payouts_enabled'
+      ) THEN
+        ALTER TABLE users ADD COLUMN stripe_payouts_enabled BOOLEAN NOT NULL DEFAULT false;
       END IF;
     END
     $$;
@@ -962,6 +1019,9 @@ const mapDbUser = (row = {}) => ({
   profilePhotoUrl: row.profile_photo_url || '',
   rating: row.rating !== null && row.rating !== undefined ? Number(row.rating) : null,
   createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+  stripeAccountId: row.stripe_account_id || null,
+  stripeChargesEnabled: !!row.stripe_charges_enabled,
+  stripePayoutsEnabled: !!row.stripe_payouts_enabled,
 });
 
 const getUserByEmail = async (email) => {
@@ -4638,6 +4698,92 @@ app.post('/api/accounting/callback', async (req, res) => {
   }
 });
 
+// Stripe Connect: create/reuse Standard account and generate onboarding link
+app.post('/api/stripe/connect/account-link', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { contractorId } = req.body || {};
+    if (!contractorId || !isUuid(contractorId)) {
+      return res.status(400).json({ message: 'contractorId is required' });
+    }
+    await assertDbReady();
+    const userRow = await getUserById(contractorId);
+    if (!userRow || (userRow.role || '').toLowerCase() !== 'contractor') {
+      return res.status(404).json({ message: 'Contractor not found' });
+    }
+
+    const stripe = getStripeClient();
+    let accountId = userRow.stripe_account_id;
+
+    // Prevent duplicates: reuse existing account if present
+    if (!accountId) {
+      const account = await stripe.accounts.create({
+        type: 'standard',
+        email: userRow.email,
+        business_type: 'individual',
+        metadata: { appUserId: contractorId, role: userRow.role },
+      });
+      accountId = account.id;
+      await client.query(
+        `
+          UPDATE users
+          SET stripe_account_id = $1,
+              stripe_charges_enabled = COALESCE($2, false),
+              stripe_payouts_enabled = COALESCE($3, false)
+          WHERE id = $4
+        `,
+        [accountId, !!account.charges_enabled, !!account.payouts_enabled, contractorId]
+      );
+    }
+
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: STRIPE_REFRESH_URL,
+      return_url: STRIPE_RETURN_URL,
+      type: 'account_onboarding',
+    });
+
+    return res.json({
+      success: true,
+      url: accountLink.url,
+      accountId,
+      chargesEnabled: !!userRow.stripe_charges_enabled,
+      payoutsEnabled: !!userRow.stripe_payouts_enabled,
+    });
+  } catch (error) {
+    console.error('stripe:connect:error', error);
+    const message = error?.message || 'Failed to create Stripe account link';
+    return res.status(500).json({ message });
+  } finally {
+    client.release();
+  }
+});
+
+// Stripe Connect: fetch current status for a contractor
+app.get('/api/stripe/connect/status', async (req, res) => {
+  try {
+    const { contractorId } = req.query || {};
+    if (!contractorId || !isUuid(contractorId)) {
+      return res.status(400).json({ message: 'contractorId is required' });
+    }
+    await assertDbReady();
+    const userRow = await getUserById(contractorId);
+    if (!userRow || (userRow.role || '').toLowerCase() !== 'contractor') {
+      return res.status(404).json({ message: 'Contractor not found' });
+    }
+    return res.json({
+      success: true,
+      accountId: userRow.stripe_account_id || null,
+      chargesEnabled: !!userRow.stripe_charges_enabled,
+      payoutsEnabled: !!userRow.stripe_payouts_enabled,
+    });
+  } catch (error) {
+    console.error('stripe:status:error', error);
+    const message = pool ? 'Failed to load Stripe status' : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  }
+});
+
 // Start ID verification session
 app.post('/api/verification/start', async (req, res) => {
   const client = await pool.connect();
@@ -4679,6 +4825,50 @@ app.post('/api/verification/start', async (req, res) => {
     return res.status(500).json({ message });
   } finally {
     client.release();
+  }
+});
+
+// Stripe webhook listener for Connect account updates
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  let event = req.body;
+  try {
+    const signature = req.headers['stripe-signature'];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const stripe = getStripeClient();
+      event = stripe.webhooks.constructEvent(req.body, signature, webhookSecret);
+    } else if (Buffer.isBuffer(req.body)) {
+      event = JSON.parse(req.body.toString('utf8'));
+    } else if (typeof req.body === 'string') {
+      event = JSON.parse(req.body);
+    }
+  } catch (error) {
+    console.error('stripe:webhook:verify:error', error);
+    return res.status(400).send(`Webhook Error: ${error.message}`);
+  }
+
+  try {
+    await assertDbReady();
+    if (event?.type === 'account.updated' && event.data?.object) {
+      const account = event.data.object;
+      const accountId = account.id;
+      const chargesEnabled = !!account.charges_enabled;
+      const payoutsEnabled = !!account.payouts_enabled;
+      await pool.query(
+        `
+          UPDATE users
+          SET stripe_charges_enabled = $1,
+              stripe_payouts_enabled = $2,
+              stripe_account_id = COALESCE(stripe_account_id, $3)
+          WHERE stripe_account_id = $3
+        `,
+        [chargesEnabled, payoutsEnabled, accountId]
+      );
+    }
+    return res.json({ received: true });
+  } catch (error) {
+    console.error('stripe:webhook:error', error);
+    return res.status(500).json({ message: 'Failed to process webhook' });
   }
 });
 

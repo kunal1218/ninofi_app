@@ -176,6 +176,13 @@ export const projectAPI = {
   getContractorProfile: async (contractorId) => api.get(`/contractors/${contractorId}/profile`),
 };
 
+export const paymentsAPI = {
+  createStripeAccountLink: async (contractorId) =>
+    api.post('/stripe/connect/account-link', { contractorId }),
+  getStripeStatus: async (contractorId) =>
+    api.get('/stripe/connect/status', { params: { contractorId } }),
+};
+
 export const messageAPI = {
   list: async (projectId, userId) =>
     api.get(`/projects/${projectId}/messages`, { params: { userId } }),

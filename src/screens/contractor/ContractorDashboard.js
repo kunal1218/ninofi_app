@@ -1,6 +1,8 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import {
+  Alert,
+  Linking,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -12,6 +14,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import VerificationBadge from '../../components/VerificationBadge';
 import { loadNotifications } from '../../services/notifications';
 import { loadContractorProjects, loadOpenProjects } from '../../services/projects';
+import { createConnectAccountLink, fetchStripeStatus } from '../../services/payments';
 import palette from '../../styles/palette';
 import { shadowCard } from '../../styles/ui';
 
@@ -21,11 +24,44 @@ const ContractorDashboard = ({ navigation }) => {
   const { openProjects, isLoadingOpen, contractorProjects, isLoadingContractor } = useSelector((state) => state.projects);
   const { items: notifications } = useSelector((state) => state.notifications);
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const [stripeStatus, setStripeStatus] = useState(null);
+  const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const stats = {
     earnings: 8450,
     activeProjects: 0,
     rating: 4.8,
   };
+
+  const loadStripeStatus = useCallback(async () => {
+    if (!user?.id) return;
+    const res = await fetchStripeStatus(user.id);
+    if (res.success) {
+      setStripeStatus(res.data);
+    }
+  }, [user?.id]);
+
+  const handleConnectBank = useCallback(async () => {
+    if (!user?.id) {
+      Alert.alert('Unavailable', 'Sign in first.');
+      return;
+    }
+    setIsConnectingStripe(true);
+    const res = await createConnectAccountLink(user.id);
+    setIsConnectingStripe(false);
+    if (!res.success) {
+      Alert.alert('Error', res.error || 'Failed to start Stripe onboarding');
+      return;
+    }
+    const url = res.data?.url;
+    if (url) {
+      try {
+        await Linking.openURL(url);
+      } catch (err) {
+        Alert.alert('Error', 'Could not open Stripe onboarding link');
+      }
+    }
+    loadStripeStatus();
+  }, [user?.id, loadStripeStatus]);
 
   const loadProjects = useCallback(() => {
     if (user?.id) {
@@ -38,7 +74,8 @@ const ContractorDashboard = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       loadProjects();
-    }, [loadProjects])
+      loadStripeStatus();
+    }, [loadProjects, loadStripeStatus])
   );
 
   return (
@@ -110,6 +147,33 @@ const ContractorDashboard = ({ navigation }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.cardGrid}>
+            <TouchableOpacity 
+              style={[styles.actionCard, shadowCard]}
+              onPress={handleConnectBank}
+              disabled={isConnectingStripe}
+            >
+              <Text style={styles.actionIcon}>🏦</Text>
+              <Text
+                style={styles.actionTitle}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+              >
+                Connect Bank
+              </Text>
+              <Text
+                style={styles.actionText}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
+                {isConnectingStripe
+                  ? 'Opening…'
+                  : stripeStatus?.payoutsEnabled
+                  ? 'Ready for payouts'
+                  : 'Required for payouts'}
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.actionCard, shadowCard]}
               onPress={() => navigation.navigate('FindJobs')}

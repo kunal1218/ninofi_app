@@ -1,3 +1,5 @@
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -6,14 +8,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
-import { useCallback } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useDispatch, useSelector } from 'react-redux';
 import VerificationBadge from '../../components/VerificationBadge';
-import palette from '../../styles/palette';
-import { glassCard, pillButton, pillButtonText, shadowCard } from '../../styles/ui';
-import { loadOpenProjects, loadContractorProjects } from '../../services/projects';
 import { loadNotifications } from '../../services/notifications';
+import { loadContractorProjects, loadOpenProjects } from '../../services/projects';
+import palette from '../../styles/palette';
+import { shadowCard } from '../../styles/ui';
 
 const ContractorDashboard = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -128,7 +128,7 @@ const ContractorDashboard = ({ navigation }) => {
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.actionCard, shadowCard]}
-              onPress={() => navigation.navigate('Portfolio')}
+onPress={() => navigation.navigate('Portfolio')}
             >
               <Text style={styles.actionIcon}>🖼️</Text>
               <Text style={styles.actionTitle}>Portfolio</Text>
@@ -155,14 +155,6 @@ const ContractorDashboard = ({ navigation }) => {
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.actionCard, shadowCard]}
-              onPress={() => navigation.navigate('Profile')}
-            >
-              <Text style={styles.actionIcon}>👤</Text>
-              <Text style={styles.actionTitle}>My Profile</Text>
-              <Text style={styles.actionText}>Licenses & docs</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.actionCard, shadowCard]}
               onPress={() => navigation.navigate('Compliance')}
             >
               <Text style={styles.actionIcon}>📑</Text>
@@ -185,6 +177,30 @@ const ContractorDashboard = ({ navigation }) => {
               <Text style={styles.actionTitle}>Register Worker</Text>
               <Text style={styles.actionText}>Add employees to your team</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionCard, shadowCard]}
+              onPress={() => navigation.navigate('ExpenseTracking')}
+            >
+              <Text style={styles.actionIcon}>💰</Text>
+              <Text style={styles.actionTitle}>Expenses</Text>
+              <Text style={styles.actionText}>Track project costs</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionCard, shadowCard]}
+              onPress={() => navigation.navigate('PayrollTracking')}
+            >
+              <Text style={styles.actionIcon}>⏱️</Text>
+              <Text style={styles.actionTitle}>Work Hours</Text>
+              <Text style={styles.actionText}>Log time & earnings</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionCard, shadowCard]}
+              onPress={() => navigation.navigate('Contracts')}
+            >
+              <Text style={styles.actionIcon}>📝</Text>
+              <Text style={styles.actionTitle}>Contracts</Text>
+              <Text style={styles.actionText}>View & sign docs</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -192,8 +208,8 @@ const ContractorDashboard = ({ navigation }) => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Active Projects</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('FindJobs')}>
-              <Text style={styles.viewAll}>Find Jobs</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('ContractorProjects')}>
+              <Text style={styles.viewAll}>View All</Text>
             </TouchableOpacity>
           </View>
 
@@ -214,13 +230,13 @@ const ContractorDashboard = ({ navigation }) => {
                     <Text style={styles.projectTitle}>{project.title}</Text>
                     <Text style={styles.projectStatus}>{project.projectType || 'Project'}</Text>
                   </View>
-                <Text style={styles.projectClient}>{project.address || 'No address provided'}</Text>
-                <Text style={styles.milestoneLabel}>
-                  Milestones: {project.milestones?.length || 0}
-                </Text>
-                <Text style={styles.milestoneAmount}>
-                  Budget: ${Number(project.estimatedBudget || 0).toLocaleString()}
-                </Text>
+                  <Text style={styles.projectMeta}>{project.address || 'No address provided'}</Text>
+                  <Text style={styles.projectMeta}>
+                    Milestones: {project.milestones?.length || 0}
+                  </Text>
+                  <Text style={styles.projectMeta}>
+                    Budget: ${Number(project.estimatedBudget || 0).toLocaleString()}
+                  </Text>
               </TouchableOpacity>
             ))}
         </View>
@@ -233,22 +249,7 @@ const ContractorDashboard = ({ navigation }) => {
               <Text style={styles.viewAll}>View All</Text>
             </TouchableOpacity>
           </View>
-          
-          <View style={styles.paymentCard}>
-            <View style={styles.paymentInfo}>
-              <Text style={styles.paymentTitle}>Kitchen Demo Complete</Text>
-              <Text style={styles.paymentDate}>Jan 18, 2025</Text>
-            </View>
-            <Text style={styles.paymentAmount}>+$2,500</Text>
-          </View>
-          
-          <View style={styles.paymentCard}>
-            <View style={styles.paymentInfo}>
-              <Text style={styles.paymentTitle}>Bathroom Tile Work</Text>
-              <Text style={styles.paymentDate}>Jan 15, 2025</Text>
-            </View>
-            <Text style={styles.paymentAmount}>+$1,800</Text>
-          </View>
+          <Text style={styles.muted}>No payments to show yet.</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -264,14 +265,16 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 8,
     padding: 18,
-    borderRadius: 18,
+    borderRadius: 22,
     overflow: 'hidden',
-    shadowColor: '#3B2A68',
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
+    shadowColor: '#2E2A54',
+    shadowOpacity: 0.15,
+    shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
-    backgroundColor: '#7E4DFF',
+    backgroundColor: palette.primary,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   heroHeader: {
     flexDirection: 'row',
@@ -291,7 +294,7 @@ const styles = StyleSheet.create({
   heroStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
     borderRadius: 14,
     padding: 12,
     gap: 8,
@@ -300,12 +303,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   heroStatLabel: {
-    color: '#EAE5FF',
-    fontSize: 12,
+    color: 'rgba(255,255,255,0.78)',
+    fontSize: 13,
   },
   heroStatValue: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     marginTop: 4,
   },
@@ -316,10 +319,17 @@ const styles = StyleSheet.create({
   },
   heroButton: {
     backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 14,
+    borderRadius: 14,
     alignItems: 'center',
     marginTop: 14,
+    shadowColor: '#2E2A54',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#EEF2FF',
   },
   heroButtonText: {
     color: palette.primary,
@@ -443,25 +453,30 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     padding: 20,
-    gap: 10,
+    gap: 12,
   },
   statCard: {
     flex: 1,
     backgroundColor: palette.surface,
-    padding: 15,
+    padding: 18,
     borderRadius: 16,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: palette.border,
+    shadowColor: '#1E293B',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 5,
-    color: palette.text,
+    marginBottom: 6,
+    color: palette.primaryDark,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 13,
     color: palette.muted,
   },
   section: {
@@ -493,37 +508,44 @@ const styles = StyleSheet.create({
   },
   actionCard: {
     flexBasis: '48%',
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: palette.surface,
     borderWidth: 1,
     borderColor: palette.border,
-    shadowColor: '#3B2A68',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    shadowColor: '#1E293B',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
   },
   actionIcon: {
-    fontSize: 20,
-    marginBottom: 6,
+    fontSize: 22,
+    marginBottom: 8,
   },
   actionTitle: {
     fontWeight: '700',
     color: palette.text,
+    fontSize: 15,
   },
   actionText: {
     color: palette.muted,
-    marginTop: 4,
-    fontSize: 12,
+    marginTop: 6,
+    fontSize: 13,
   },
   projectCard: {
     backgroundColor: palette.surface,
-    padding: 20,
     borderRadius: 16,
-    marginBottom: 15,
+    padding: 16,
     borderWidth: 1,
     borderColor: palette.border,
+    marginBottom: 12,
+    gap: 6,
+    shadowColor: '#1E293B',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   projectHeader: {
     flexDirection: 'row',
@@ -539,31 +561,18 @@ const styles = StyleSheet.create({
   },
   projectStatus: {
     fontSize: 12,
-    color: palette.primary,
-    backgroundColor: '#EEE4FF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    color: '#fff',
+    backgroundColor: palette.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    fontWeight: '700',
+    overflow: 'hidden',
+    marginLeft: 8,
   },
-  projectClient: {
-    fontSize: 14,
+  projectMeta: {
     color: palette.muted,
-    marginBottom: 15,
-  },
-  milestoneInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  milestoneLabel: {
-    fontSize: 14,
-    color: palette.text,
-  },
-  milestoneAmount: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: palette.primary,
+    fontSize: 13,
   },
   progressBar: {
     height: 6,

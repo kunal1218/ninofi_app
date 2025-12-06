@@ -39,6 +39,8 @@ const initialState = {
   contractorProjects: [],
   isLoadingContractor: false,
   contractorError: null,
+  workerAssignments: [],
+  workerProjects: [],
 };
 
 const projectSlice = createSlice({
@@ -113,6 +115,32 @@ const projectSlice = createSlice({
       state.isLoadingContractor = false;
       state.contractorError = action.payload;
     },
+    addWorkerAssignment: (state, action) => {
+      state.workerAssignments.push({
+        id: action.payload.id,
+        projectId: action.payload.projectId,
+        workerId: action.payload.workerId,
+        description: action.payload.description,
+        dueDate: action.payload.dueDate,
+        pay: action.payload.pay,
+        createdAt: new Date().toISOString(),
+      });
+    },
+    addWorkerProject: (state, action) => {
+      if (!action.payload?.id) return;
+      const exists = state.workerProjects.find((p) => p.id === action.payload.id);
+      if (exists) {
+        Object.assign(exists, action.payload);
+      } else {
+        state.workerProjects.push(action.payload);
+      }
+    },
+    removeWorkerProject: (state, action) => {
+      const projectId = action.payload;
+      if (!projectId) return;
+      state.workerProjects = state.workerProjects.filter((p) => p.id !== projectId);
+      state.workerAssignments = state.workerAssignments.filter((a) => a.projectId !== projectId);
+    },
   },
 });
 
@@ -133,6 +161,9 @@ export const {
   fetchContractorProjectsStart,
   fetchContractorProjectsSuccess,
   fetchContractorProjectsFailure,
+  addWorkerAssignment,
+  addWorkerProject,
+  removeWorkerProject,
 } = projectSlice.actions;
 
 export default projectSlice.reducer;

@@ -120,8 +120,7 @@ export const projectAPI = {
   deleteApplication: async (applicationId, contractorId) =>
     api.delete(`/applications/${applicationId}`, { data: contractorId ? { contractorId } : {} }),
   getProjectDetails: async (projectId) => api.get(`/projects/${projectId}/details`),
-  leaveProject: async (projectId, contractorId) =>
-    api.post(`/projects/${projectId}/leave`, { contractorId }),
+  leaveProject: async (projectId, payload) => api.post(`/projects/${projectId}/leave`, payload),
   getProjectPersonnel: async (projectId, userId) =>
     api.get(`/projects/${projectId}/personnel`, { params: { userId } }),
   addProjectPersonnel: async (projectId, payload) =>
@@ -129,9 +128,18 @@ export const projectAPI = {
   deleteProjectPersonnel: async (projectId, personId, payload) =>
     api.delete(`/projects/${projectId}/personnel/${personId}`, { data: payload }),
   createContract: async (payload) => api.post('/contracts', payload),
+  deleteContract: async (contractId, payload) =>
+    api.delete(`/contracts/${contractId}`, { data: payload }),
   getContractsForProject: async (projectId) => api.get(`/contracts/project/${projectId}`),
   getContract: async (contractId) => api.get(`/contracts/${contractId}`),
   signContract: async (contractId, payload) => api.post(`/contracts/${contractId}/sign`, payload),
+  postWorkGig: async (projectId, payload) => api.post(`/projects/${projectId}/gigs`, payload),
+  listOpenGigs: async (workerId) =>
+    api.get('/gigs/open', { params: workerId ? { workerId } : {} }),
+  applyToGig: async (gigId, payload) => api.post(`/gigs/${gigId}/apply`, payload),
+  listGigApplications: async (workerId) => api.get('/gigs/applications', { params: { workerId } }),
+  withdrawGigApplication: async (applicationId, payload) =>
+    api.delete(`/gigs/applications/${applicationId}`, { data: payload }),
   savePortfolio: async (payload) => api.post('/portfolio', payload),
   getPortfolio: async (contractorId) => api.get(`/contractors/${contractorId}/portfolio`),
   addPortfolioMedia: async (portfolioId, media) =>
@@ -190,6 +198,14 @@ export const invoiceAPI = {
 
 export const userAPI = {
   listWorkers: async () => api.get('/users/worker'),
+};
+
+// Feature Flags API
+export const featureFlagsAPI = {
+  getAllFlags: async () => api.get('/feature-flags'),
+  getFlag: async (featureName) => api.get(`/feature-flags/${featureName}`),
+  toggleFlag: async (featureName, enabled, description) =>
+    api.put(`/feature-flags/${featureName}`, { enabled, description }),
 };
 
 export default api;

@@ -3758,7 +3758,10 @@ app.delete('/api/projects/:projectId', async (req, res) => {
     // Delete project (dependent tables assumed ON DELETE CASCADE)
     await client.query('DELETE FROM projects WHERE id = $1', [projectId]);
 
-    // Notify everyone involved (except duplicates)
+    // Notify everyone involved (except the actor)
+    if (participants.has(userId)) {
+      participants.delete(userId);
+    }
     for (const uid of participants) {
       if (!uid) continue;
       const notifId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
@@ -3771,7 +3774,7 @@ app.delete('/api/projects/:projectId', async (req, res) => {
           notifId,
           uid,
           'Project deleted',
-          `${projectRes.rows[0].title || 'A project'} has been deleted by the owner.`,
+          `${projectRes.rows[0].title || 'A project'} has been deleted by a team member.`,
           JSON.stringify({ type: 'project-deleted', projectId }),
         ]
       );

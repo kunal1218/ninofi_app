@@ -1947,14 +1947,19 @@ const extractBase64Payload = (raw = '') => {
   return data || '';
 };
 
+// Remove only the existing signatures block (header + 8 following lines). Leaves content after it intact.
 const stripExistingSignaturesSection = (text = '') => {
   if (!text) return '';
-  const regex = /(^|\n)\*\*Signatures\*\*/i;
-  const match = text.match(regex);
-  if (!match || match.index === undefined) {
+  const lines = text.split('\n');
+  const headerIndex = lines.findIndex((line) => /\*\*Signatures\*\*/i.test(line));
+  if (headerIndex === -1) {
     return text.trimEnd();
   }
-  return text.slice(0, match.index).trimEnd();
+  const endIndex = Math.min(lines.length, headerIndex + 1 + 8); // header + 8 lines (4 fields + blank lines)
+  const before = lines.slice(0, headerIndex).join('\n').trimEnd();
+  const after = lines.slice(endIndex).join('\n').trimStart();
+  if (before && after) return `${before}\n\n${after}`.trimEnd();
+  return (before || after).trimEnd();
 };
 
 const persistMedia = async (projectId, mediaItems = []) => {

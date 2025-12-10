@@ -8499,7 +8499,10 @@ app.get('/api/monitoring/stats', (_req, res) => {
 
 app.get('/stripe/return', (req, res) => {
   console.log('stripe:return', req.query || {});
-  const deeplink = process.env.MOBILE_DEEPLINK_URL;
+  const deeplink =
+    process.env.MOBILE_DEEPLINK_URL ||
+    process.env.EXPO_PUBLIC_MOBILE_DEEPLINK_URL ||
+    process.env.EXPO_PUBLIC_DEEPLINK_URL;
   if (deeplink) {
     return res.send(`<!doctype html>
     <html>

@@ -2,6 +2,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  AppState,
   Linking,
   SafeAreaView,
   ScrollView,
@@ -90,6 +91,15 @@ const ContractorDashboard = ({ navigation }) => {
     }
     lastConnectedRef.current = isStripeConnected;
   }, [isStripeConnected]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        loadStripeStatus();
+      }
+    });
+    return () => sub.remove();
+  }, [loadStripeStatus]);
 
   useFocusEffect(
     useCallback(() => {

@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
+import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
-import * as ImagePicker from 'expo-image-picker';
 import palette from '../../styles/palette';
 import { projectAPI } from '../../services/api';
 import { addWorkerAssignment, removeWorkerProject } from '../../store/projectSlice';
@@ -60,8 +59,10 @@ const WorkerGigsScreen = ({ navigation }) => {
           projectId: t.projectId,
           workerId: user?.id,
           description: t.description,
-          dueDate: '',
+          dueDate: t.dueDate || '',
           pay: t.pay || 0,
+          status: t.status,
+          proofImageUrl: t.proofImageUrl || null,
         }));
         mapped.forEach((m) => {
           if (!existingIds.has(m.id)) {
@@ -117,36 +118,6 @@ const WorkerGigsScreen = ({ navigation }) => {
     }
   };
 
-  const handleSubmitWork = async (proj) => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Camera permission is needed to submit work.');
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({ base64: false, quality: 0.7 });
-      if (result.canceled || !result.assets?.length) return;
-      const uri = result.assets[0].uri;
-      const relatedAssignments = assignments.filter((a) => a.projectId === proj.id);
-      const totalPay = relatedAssignments.reduce((sum, a) => sum + Number(a.pay || 0), 0);
-      if (!totalPay) {
-        Alert.alert('Missing pay', 'No pay amount found for this gig.');
-        return;
-      }
-      const amountCents = Math.round(totalPay * 100);
-      await projectAPI.submitGigWork(proj.id, {
-        proofImageUrl: uri,
-        amountCents,
-        title: proj.title,
-        description: proj.description,
-      });
-      Alert.alert('Submitted', 'Your proof has been submitted for review.');
-    } catch (err) {
-      console.log('gig:submit:error', err?.response?.data || err.message);
-      Alert.alert('Error', err?.response?.data?.message || 'Failed to submit work');
-    }
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -167,9 +138,6 @@ const WorkerGigsScreen = ({ navigation }) => {
                   .reduce((sum, a) => sum + Number(a.pay || 0), 0)
                   .toLocaleString()}
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.submitButton} onPress={() => handleSubmitWork(proj)}>
-              <Text style={styles.submitText}>Submit Work</Text>
             </TouchableOpacity>
           </View>
         ))}
@@ -193,14 +161,6 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontWeight: '700', color: palette.text },
   cardMeta: { color: palette.muted, fontSize: 12 },
-  submitButton: {
-    marginTop: 8,
-    backgroundColor: palette.primary,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  submitText: { color: '#fff', fontWeight: '700' },
 });
 
 export default WorkerGigsScreen;

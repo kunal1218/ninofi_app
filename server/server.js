@@ -2088,7 +2088,7 @@ const requireAdmin = async (req, res, next) => {
   }
 };
 
-const sendNotification = async (userId, title, message) => {
+const sendNotification = async (userId, title, message, data = {}) => {
   if (!userId || !title || !message) return;
   try {
     await assertDbReady();
@@ -2098,7 +2098,7 @@ const sendNotification = async (userId, title, message) => {
         INSERT INTO notifications (id, user_id, title, body, data, read, created_at)
         VALUES ($1, $2, $3, $4, $5, false, NOW())
       `,
-      [id, userId, title, message, {}]
+      [id, userId, title, message, data || {}]
     );
   } catch (err) {
     console.error('notify:error', err);
@@ -5170,7 +5170,12 @@ app.post('/api/projects/:projectId/assign-task', requireAuth, async (req, res) =
       ]
     );
     await client.query('COMMIT');
-    await sendNotification(workerId, 'New work assigned', `You have new work on ${projectRes.rows[0].title || 'a project'}. Pay: $${(payCents / 100).toFixed(2)}`);
+    await sendNotification(
+      workerId,
+      'New work assigned',
+      `You have new work on ${projectRes.rows[0].title || 'a project'}. Pay: $${(payCents / 100).toFixed(2)}`,
+      { type: 'task-assigned', projectId, projectTitle: projectRes.rows[0].title, taskId }
+    );
     return res.json({ success: true, taskId });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -5328,7 +5333,16 @@ app.post('/api/admin/tasks/:taskId/decision', requireAdmin, async (req, res) => 
         [TASK_STATUSES.DENIED, message || null, taskId]
       );
       if (task.worker_id) {
-        await sendNotification(task.worker_id, 'Task denied', `Support has denied your claim: ${message || 'No reason provided.'}`);
+        const projectTitleRes = task.project_id
+          ? await client.query('SELECT title FROM projects WHERE id = $1 LIMIT 1', [task.project_id])
+          : null;
+        const projectTitle = projectTitleRes?.rows?.[0]?.title || null;
+        await sendNotification(
+          task.worker_id,
+          'Task denied',
+          `Support has denied your claim: ${message || 'No reason provided.'}`,
+          { type: 'task-decision', decision: 'DENY', projectId: task.project_id, taskId: task.id, projectTitle }
+        );
       }
       await client.query('COMMIT');
       return res.json({ success: true, status: TASK_STATUSES.DENIED });
@@ -5339,6 +5353,10 @@ app.post('/api/admin/tasks/:taskId/decision', requireAdmin, async (req, res) => 
       return res.status(400).json({ message: 'Task missing worker or amount' });
     }
     const workerRes = await client.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [task.worker_id]);
+    const projectTitleRes = task.project_id
+      ? await client.query('SELECT title FROM projects WHERE id = $1 LIMIT 1', [task.project_id])
+      : null;
+    const projectTitle = projectTitleRes?.rows?.[0]?.title || null;
     const worker = workerRes.rows[0];
     if (!worker?.stripe_account_id) {
       await client.query('ROLLBACK');
@@ -5368,7 +5386,12 @@ app.post('/api/admin/tasks/:taskId/decision', requireAdmin, async (req, res) => 
       [TASK_STATUSES.VERIFIED, message || null, transfer.id, taskId]
     );
     await client.query('COMMIT');
-    await sendNotification(worker.id, 'Task approved', `$${Number(task.escrow_amount_cents / 100).toFixed(2)} earned for ${task.title}.`);
+    await sendNotification(
+      worker.id,
+      'Task approved',
+      `$${Number(task.escrow_amount_cents / 100).toFixed(2)} earned for ${task.title}.`,
+      { type: 'task-decision', decision: 'APPROVE', projectId: task.project_id, taskId: task.id, projectTitle }
+    );
     return res.json({ success: true, status: TASK_STATUSES.VERIFIED, transferId: transfer.id });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});

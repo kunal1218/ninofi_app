@@ -18,14 +18,14 @@ const AssignWorkScreen = ({ route, navigation }) => {
       return;
     }
     try {
-      await projectAPI.assignTask(project?.id, {
+      const res = await projectAPI.assignTask(project?.id, {
         workerId: worker?.id,
         description: description.trim(),
         dueDate: dueDate.trim(),
         pay: Number(pay) || 0,
         title: `Work for ${project?.title || 'Project'}`,
       });
-      const id = `assign-${Date.now()}`;
+      const id = res?.data?.taskId || `assign-${Date.now()}`;
       dispatch(
         addWorkerAssignment({
           id,
@@ -34,6 +34,7 @@ const AssignWorkScreen = ({ route, navigation }) => {
           description: description.trim(),
           dueDate: dueDate.trim(),
           pay: Number(pay) || 0,
+          status: 'ASSIGNED',
         })
       );
       Alert.alert('Saved', 'Work assigned to worker.');

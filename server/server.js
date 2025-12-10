@@ -2076,9 +2076,15 @@ const requireAdmin = async (req, res, next) => {
     authMiddleware(req, res, () => {});
     if (!req.userId) return; // authMiddleware already responded
     await assertDbReady();
-    const userRes = await pool.query('SELECT user_role FROM users WHERE id = $1 LIMIT 1', [req.userId]);
+    const userRes = await pool.query('SELECT user_role, email_normalized FROM users WHERE id = $1 LIMIT 1', [req.userId]);
     const role = (userRes.rows[0]?.user_role || '').toUpperCase();
-    if (role !== 'ADMIN') {
+    const emailNormalized = (userRes.rows[0]?.email_normalized || '').toLowerCase();
+    const allowlist = (process.env.ADMIN_EMAILS || process.env.EXPO_PUBLIC_ADMIN_EMAILS || '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    const isAllowlisted = emailNormalized && allowlist.includes(emailNormalized);
+    if (role !== 'ADMIN' && !isAllowlisted) {
       return res.status(403).json({ message: 'Admin access required' });
     }
     return next();

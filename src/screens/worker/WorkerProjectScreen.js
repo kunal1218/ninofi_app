@@ -50,8 +50,8 @@ const WorkerProjectScreen = ({ route, navigation }) => {
           {attachments.length === 0 ? (
             <Text style={styles.muted}>No attachments.</Text>
           ) : (
-            attachments.map((m) => (
-              <Text key={m.id || m.url} style={styles.link}>
+            attachments.map((m, idx) => (
+              <Text key={m.id || m.url || idx} style={styles.link}>
                 {m.label || 'Attachment'} - {m.url}
               </Text>
             ))

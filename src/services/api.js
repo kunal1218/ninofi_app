@@ -175,6 +175,8 @@ export const projectAPI = {
   getAdminPendingTasks: async () => api.get('/admin/tasks/pending'),
   postAdminTaskDecision: async (taskId, payload) => api.post(`/admin/tasks/${taskId}/decision`, payload),
   submitGigWork: async (projectId, payload) => api.post(`/gigs/${projectId}/submit-work`, payload),
+  assignTask: async (projectId, payload) => api.post(`/projects/${projectId}/assign-task`, payload),
+  listWorkerTasks: async (workerId) => api.get(`/gigs/worker/${workerId}/tasks`),
   searchContractors: async (params) => api.get('/contractors/search', { params }),
   getContractorProfile: async (contractorId) => api.get(`/contractors/${contractorId}/profile`),
 };

@@ -5130,6 +5130,90 @@ app.post('/api/tasks/:taskId/submit', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/projects/:projectId/assign-task', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { projectId } = req.params;
+    const { workerId, description, dueDate, pay, title } = req.body || {};
+    if (!projectId || !workerId || !pay) {
+      return res.status(400).json({ message: 'projectId, workerId, and pay are required' });
+    }
+    const payCents = Math.round(Number(pay) * 100);
+    if (Number.isNaN(payCents) || payCents <= 0) {
+      return res.status(400).json({ message: 'pay must be positive' });
+    }
+    await client.query('BEGIN');
+    const projectRes = await client.query('SELECT * FROM projects WHERE id = $1', [projectId]);
+    if (!projectRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Project not found' });
+    }
+    const taskId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+    await client.query(
+      `
+        INSERT INTO tasks (id, title, description, project_id, creator_id, worker_id, escrow_amount_cents, status, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+      `,
+      [
+        taskId,
+        title || 'Assigned Work',
+        description || projectRes.rows[0].description || null,
+        projectId,
+        req.userId,
+        workerId,
+        payCents,
+        TASK_STATUSES.ASSIGNED,
+      ]
+    );
+    await client.query('COMMIT');
+    await sendNotification(workerId, 'New work assigned', `You have new work on ${projectRes.rows[0].title || 'a project'}. Pay: $${(payCents / 100).toFixed(2)}`);
+    return res.json({ success: true, taskId });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('assign-task:error', error);
+    return res.status(500).json({ message: 'Failed to assign task' });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/api/gigs/worker/:workerId/tasks', requireAuth, async (req, res) => {
+  try {
+    const { workerId } = req.params;
+    if (!workerId || workerId !== req.userId) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+    await assertDbReady();
+    const rows = await pool.query(
+      `
+        SELECT t.*, p.title AS project_title, p.description AS project_description
+        FROM tasks t
+        LEFT JOIN projects p ON p.id = t.project_id
+        WHERE t.worker_id = $1
+        ORDER BY t.created_at DESC
+        LIMIT 100
+      `,
+      [workerId]
+    );
+    const tasks = rows.rows.map((t) => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      projectId: t.project_id,
+      projectTitle: t.project_title,
+      projectDescription: t.project_description,
+      pay: Number(t.escrow_amount_cents || 0) / 100,
+      status: t.status,
+      proofImageUrl: t.proof_image_url || null,
+      createdAt: t.created_at,
+    }));
+    return res.json({ tasks });
+  } catch (error) {
+    console.error('gigs:worker:tasks:error', error);
+    return res.status(500).json({ message: 'Failed to load tasks' });
+  }
+});
+
 app.post('/api/gigs/:projectId/submit-work', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {

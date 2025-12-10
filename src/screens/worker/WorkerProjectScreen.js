@@ -3,7 +3,7 @@ import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } fr
 import palette from '../../styles/palette';
 import { projectAPI } from '../../services/api';
 import { useSelector, useDispatch } from 'react-redux';
-import { addWorkerProject, removeWorkerProject } from '../../store/projectSlice';
+import { addWorkerAssignment, addWorkerProject, removeWorkerProject } from '../../store/projectSlice';
 
 const WorkerProjectScreen = ({ route, navigation }) => {
   const { projectId } = route.params || {};
@@ -37,6 +37,32 @@ const WorkerProjectScreen = ({ route, navigation }) => {
 
   const attachments = project?.media || [];
 
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!user?.id) return;
+        const taskRes = await projectAPI.listWorkerTasks(user.id);
+        const tasks = taskRes.data?.tasks || [];
+        tasks
+          .filter((t) => t.projectId === projectId)
+          .forEach((t) => {
+            dispatch(
+              addWorkerAssignment({
+                id: t.id,
+                projectId: t.projectId,
+                workerId: user.id,
+                description: t.description,
+                dueDate: '',
+                pay: t.pay || 0,
+              })
+            );
+          });
+      } catch (err) {
+        console.log('worker:load:tasks:error', err?.response?.data || err.message);
+      }
+    })();
+  }, [user?.id, projectId]);
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -63,10 +89,12 @@ const WorkerProjectScreen = ({ route, navigation }) => {
             <Text style={styles.muted}>No work assigned yet.</Text>
           ) : (
             assignments.map((a) => (
-              <View key={a.id} style={styles.assignmentRow}>
-                <Text style={styles.assignmentText}>{a.description}</Text>
-                <Text style={styles.assignmentMeta}>Due: {a.dueDate || 'TBD'}</Text>
-                <Text style={styles.assignmentMeta}>Pay: ${Number(a.pay || 0).toLocaleString()}</Text>
+              <View key={a.id} style={styles.contractCard}>
+                <View style={styles.contractHeader}>
+                  <Text style={styles.contractTitle}>{a.description || 'Assigned Work'}</Text>
+                  <Text style={styles.contractStatus}>Pay ${Number(a.pay || 0).toLocaleString()}</Text>
+                </View>
+                <Text style={styles.contractMeta}>Due: {a.dueDate || 'TBD'}</Text>
               </View>
             ))
           )}

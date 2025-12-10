@@ -50,6 +50,23 @@ const WorkerGigsScreen = ({ navigation }) => {
 
   useEffect(() => {
     loadApplications();
+    (async () => {
+      try {
+        const taskRes = await projectAPI.listWorkerTasks(user?.id);
+        const tasks = taskRes.data?.tasks || [];
+        const mapped = tasks.map((t) => ({
+          id: t.id,
+          projectId: t.projectId,
+          workerId: user?.id,
+          description: t.description,
+          dueDate: '',
+          pay: t.pay || 0,
+        }));
+        mapped.forEach((m) => dispatch(addWorkerAssignment(m)));
+      } catch (err) {
+        console.log('worker:tasks:error', err?.response?.data || err.message);
+      }
+    })();
   }, [loadApplications]);
 
   const acceptedApps = apps.filter((a) => (a.status || '').toLowerCase() === 'accepted');

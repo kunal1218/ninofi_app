@@ -2313,7 +2313,7 @@ const isAdminRequest = (req) => {
   return false;
 };
 
-const requireAdmin = (req, res) => {
+const requireAdminKey = (req, res) => {
   if (!isAdminRequest(req)) {
     res.status(403).json({ message: 'Admin access required' });
     return false;
@@ -7946,7 +7946,7 @@ app.post('/api/compliance/check-expiry', async (_req, res) => {
 
 app.get('/api/admin/analytics', async (req, res) => {
   try {
-    if (!requireAdmin(req, res)) return;
+    if (!requireAdminKey(req, res)) return;
     await assertDbReady();
     const projects = await pool.query('SELECT COUNT(*) FROM projects');
     const users = await pool.query('SELECT COUNT(*) FROM users');
@@ -7967,7 +7967,7 @@ app.get('/api/admin/analytics', async (req, res) => {
 
 app.get('/api/admin/users', async (req, res) => {
   try {
-    if (!requireAdmin(req, res)) return;
+    if (!requireAdminKey(req, res)) return;
     await assertDbReady();
     const result = await pool.query('SELECT id, full_name, email, role, created_at, profile_photo_url FROM users ORDER BY created_at DESC LIMIT 200');
     return res.json(result.rows.map(mapDbUser));
@@ -7980,7 +7980,7 @@ app.get('/api/admin/users', async (req, res) => {
 
 app.get('/api/admin/disputes', async (req, res) => {
   try {
-    if (!requireAdmin(req, res)) return;
+    if (!requireAdminKey(req, res)) return;
     await assertDbReady();
     const result = await pool.query('SELECT * FROM disputes ORDER BY created_at DESC LIMIT 200');
     return res.json(result.rows.map(mapDisputeRow));
@@ -7993,7 +7993,7 @@ app.get('/api/admin/disputes', async (req, res) => {
 
 app.post('/api/admin/disputes/:id/resolve', async (req, res) => {
   try {
-    if (!requireAdmin(req, res)) return;
+    if (!requireAdminKey(req, res)) return;
     const { id } = req.params;
     const { status, resolutionNotes } = req.body || {};
     if (!id || !status) {
@@ -8156,7 +8156,7 @@ app.get('/api/contractors/:contractorId/profile', async (req, res) => {
 
 app.get('/api/admin/flags', async (req, res) => {
   try {
-    if (!requireAdmin(req, res)) return;
+    if (!requireAdminKey(req, res)) return;
     await assertDbReady();
     const result = await pool.query('SELECT * FROM flags ORDER BY created_at DESC LIMIT 200');
     return res.json(result.rows);
@@ -8169,7 +8169,7 @@ app.get('/api/admin/flags', async (req, res) => {
 
 app.post('/api/admin/flags/:id/resolve', async (req, res) => {
   try {
-    if (!requireAdmin(req, res)) return;
+    if (!requireAdminKey(req, res)) return;
     const { id } = req.params;
     await assertDbReady();
     await pool.query("UPDATE flags SET status = 'resolved', updated_at = NOW() WHERE id = $1", [id]);

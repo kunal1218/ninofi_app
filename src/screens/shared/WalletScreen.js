@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
     Alert,
     ActivityIndicator,
+    Linking,
     SafeAreaView,
     ScrollView,
     StyleSheet,
@@ -9,22 +10,47 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { useSelector } from 'react-redux';
 import { walletAPI } from '../../services/api';
+import { createConnectAccountLink } from '../../services/payments';
 import palette from '../../styles/palette';
 
 const WalletScreen = ({ navigation }) => {
+  const { user, role } = useSelector((state) => state.auth);
   const [selectedTab, setSelectedTab] = useState('all');
   const [available, setAvailable] = useState(0);
   const [pending, setPending] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [addingFunds, setAddingFunds] = useState(false);
+  const [redirected, setRedirected] = useState(false);
+  const isStripeConnected =
+    !!((user?.stripeAccountId || user?.stripe_account_id) &&
+    (user?.stripePayoutsEnabled || user?.stripe_payouts_enabled) &&
+    (user?.stripeChargesEnabled || user?.stripe_charges_enabled));
 
   const formatCurrency = (amount = 0) =>
     `$${Number(amount || 0).toLocaleString(undefined, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
+
+  const redirectToConnectBank = useCallback(async () => {
+    setRedirected(true);
+    if (!user?.id) {
+      navigation.goBack?.();
+      return;
+    }
+    const res = await createConnectAccountLink(user.id);
+    if (res.success && res.data?.url) {
+      try {
+        await Linking.openURL(res.data.url);
+      } catch (_err) {
+        // no-op
+      }
+    }
+    navigation.goBack?.();
+  }, [navigation, user?.id]);
 
   const loadBalance = useCallback(async () => {
     setLoading(true);
@@ -42,8 +68,18 @@ const WalletScreen = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
+    if (role === 'contractor' && !isStripeConnected) {
+      return;
+    }
     loadBalance();
-  }, [loadBalance]);
+  }, [isStripeConnected, loadBalance, role]);
+
+  useEffect(() => {
+    if (redirected) return;
+    if (role === 'contractor' && !isStripeConnected) {
+      redirectToConnectBank();
+    }
+  }, [isStripeConnected, redirectToConnectBank, redirected, role]);
 
   const transactions = [];
 
@@ -74,11 +110,11 @@ const WalletScreen = ({ navigation }) => {
     setAddingFunds(true);
     setError(null);
     try {
-      await walletAPI.addTestFunds();
+      await walletAPI.addDemoFunds();
       await loadBalance();
-      Alert.alert('Success', 'Added $50 test funds.');
+      Alert.alert('Success', 'Added $13 test funds.');
     } catch (_err) {
-      setError('Could not add test funds.');
+      setError('Could not add demo funds.');
     } finally {
       setAddingFunds(false);
     }
@@ -160,7 +196,7 @@ const WalletScreen = ({ navigation }) => {
                   adjustsFontSizeToFit
                   minimumFontScale={0.85}
                 >
-                  {addingFunds ? 'Adding...' : 'Add $50 Test Funds'}
+                  {addingFunds ? 'Adding...' : 'Add $13 Test Funds'}
                 </Text>
               </TouchableOpacity>
             ) : (

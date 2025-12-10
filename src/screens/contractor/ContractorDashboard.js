@@ -31,6 +31,10 @@ const ContractorDashboard = ({ navigation }) => {
     activeProjects: 0,
     rating: 4.8,
   };
+  const isStripeConnected =
+    !!((stripeStatus?.accountId || user?.stripeAccountId) &&
+    ((stripeStatus?.payoutsEnabled ?? user?.stripePayoutsEnabled) ||
+      (stripeStatus?.chargesEnabled ?? user?.stripeChargesEnabled)));
 
   const loadStripeStatus = useCallback(async () => {
     if (!user?.id) return;
@@ -70,6 +74,14 @@ const ContractorDashboard = ({ navigation }) => {
       dispatch(loadNotifications(user.id));
     }
   }, [dispatch, user?.id]);
+
+  const handleWalletPress = useCallback(() => {
+    if (!isStripeConnected) {
+      handleConnectBank();
+      return;
+    }
+    navigation.navigate('Wallet');
+  }, [handleConnectBank, isStripeConnected, navigation]);
 
   useFocusEffect(
     useCallback(() => {
@@ -117,7 +129,7 @@ const ContractorDashboard = ({ navigation }) => {
           </View>
           <TouchableOpacity
             style={styles.heroButton}
-            onPress={() => navigation.navigate('Wallet')}
+            onPress={handleWalletPress}
             activeOpacity={0.9}
           >
             <Text style={styles.heroButtonText}>View Wallet</Text>
@@ -247,7 +259,7 @@ onPress={() => navigation.navigate('Portfolio')}
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.actionCard, shadowCard]}
-              onPress={() => navigation.navigate('Wallet')}
+              onPress={handleWalletPress}
             >
               <Text style={styles.actionIcon}>💰</Text>
               <Text

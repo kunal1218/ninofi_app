@@ -4831,8 +4831,30 @@ app.get('/api/stripe/connect/status', async (req, res) => {
     if (!userRow || (userRow.role || '').toLowerCase() !== 'contractor') {
       return res.status(404).json({ message: 'Contractor not found' });
     }
-    const chargesEnabled = !!userRow.stripe_charges_enabled;
-    const payoutsEnabled = !!userRow.stripe_payouts_enabled;
+    if (!userRow.stripe_account_id) {
+      return res.status(400).json({ message: 'Stripe account not connected' });
+    }
+
+    const stripe = getStripeClient();
+    let account = null;
+    try {
+      account = await stripe.accounts.retrieve(userRow.stripe_account_id);
+      await pool.query(
+        `
+          UPDATE users
+          SET stripe_charges_enabled = $1,
+              stripe_payouts_enabled = $2
+          WHERE id = $3
+        `,
+        [!!account.charges_enabled, !!account.payouts_enabled, contractorId]
+      );
+    } catch (err) {
+      console.error('stripe:status:retrieve:error', err);
+    }
+
+    const chargesEnabled = account ? !!account.charges_enabled : !!userRow.stripe_charges_enabled;
+    const payoutsEnabled = account ? !!account.payouts_enabled : !!userRow.stripe_payouts_enabled;
+
     return res.json({
       success: true,
       accountId: userRow.stripe_account_id || null,

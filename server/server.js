@@ -784,6 +784,7 @@ const initDb = async () => {
       stripe_transfer_id TEXT
     )
   `);
+  await pool.query("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date TEXT");
   await pool.query('CREATE INDEX IF NOT EXISTS tasks_creator_idx ON tasks (creator_id, status)');
   await pool.query('CREATE INDEX IF NOT EXISTS tasks_worker_idx ON tasks (worker_id, status)');
   await pool.query('CREATE INDEX IF NOT EXISTS tasks_project_idx ON tasks (project_id)');
@@ -5094,6 +5095,7 @@ app.post('/api/tasks/:taskId/submit', requireAuth, async (req, res) => {
     const { taskId } = req.params;
     const { proofImageUrl } = req.body || {};
     if (!proofImageUrl) return res.status(400).json({ message: 'proofImageUrl is required' });
+    await assertDbReady();
     await client.query('BEGIN');
     const taskRes = await client.query('SELECT * FROM tasks WHERE id = $1 FOR UPDATE', [taskId]);
     if (!taskRes.rows.length) {
@@ -5138,6 +5140,7 @@ app.post('/api/projects/:projectId/assign-task', requireAuth, async (req, res) =
     if (!projectId || !workerId || !pay) {
       return res.status(400).json({ message: 'projectId, workerId, and pay are required' });
     }
+    await assertDbReady();
     const payCents = Math.round(Number(pay) * 100);
     if (Number.isNaN(payCents) || payCents <= 0) {
       return res.status(400).json({ message: 'pay must be positive' });
@@ -5151,8 +5154,8 @@ app.post('/api/projects/:projectId/assign-task', requireAuth, async (req, res) =
     const taskId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
     await client.query(
       `
-        INSERT INTO tasks (id, title, description, project_id, creator_id, worker_id, escrow_amount_cents, status, updated_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+        INSERT INTO tasks (id, title, description, project_id, creator_id, worker_id, escrow_amount_cents, status, due_date, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
       `,
       [
         taskId,
@@ -5163,6 +5166,7 @@ app.post('/api/projects/:projectId/assign-task', requireAuth, async (req, res) =
         workerId,
         payCents,
         TASK_STATUSES.ASSIGNED,
+        dueDate || null,
       ]
     );
     await client.query('COMMIT');
@@ -5195,18 +5199,19 @@ app.get('/api/gigs/worker/:workerId/tasks', requireAuth, async (req, res) => {
       `,
       [workerId]
     );
-    const tasks = rows.rows.map((t) => ({
-      id: t.id,
-      title: t.title,
-      description: t.description,
-      projectId: t.project_id,
-      projectTitle: t.project_title,
-      projectDescription: t.project_description,
-      pay: Number(t.escrow_amount_cents || 0) / 100,
-      status: t.status,
-      proofImageUrl: t.proof_image_url || null,
-      createdAt: t.created_at,
-    }));
+      const tasks = rows.rows.map((t) => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        projectId: t.project_id,
+        projectTitle: t.project_title,
+        projectDescription: t.project_description,
+        pay: Number(t.escrow_amount_cents || 0) / 100,
+        status: t.status,
+        proofImageUrl: t.proof_image_url || null,
+        dueDate: t.due_date || null,
+        createdAt: t.created_at,
+      }));
     return res.json({ tasks });
   } catch (error) {
     console.error('gigs:worker:tasks:error', error);

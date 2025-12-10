@@ -52,7 +52,7 @@ const WorkerProjectScreen = ({ route, navigation }) => {
                 projectId: t.projectId,
                 workerId: user.id,
                 description: t.description,
-                dueDate: '',
+                dueDate: t.dueDate || '',
                 pay: t.pay || 0,
               })
             );

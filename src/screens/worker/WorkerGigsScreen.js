@@ -5,7 +5,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import * as ImagePicker from 'expo-image-picker';
 import palette from '../../styles/palette';
 import { projectAPI } from '../../services/api';
-import { removeWorkerProject } from '../../store/projectSlice';
+import { addWorkerAssignment, removeWorkerProject } from '../../store/projectSlice';
 
 const WorkerGigsScreen = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -54,6 +54,7 @@ const WorkerGigsScreen = ({ navigation }) => {
       try {
         const taskRes = await projectAPI.listWorkerTasks(user?.id);
         const tasks = taskRes.data?.tasks || [];
+        const existingIds = new Set((workerAssignments || []).map((a) => a.id));
         const mapped = tasks.map((t) => ({
           id: t.id,
           projectId: t.projectId,
@@ -62,7 +63,11 @@ const WorkerGigsScreen = ({ navigation }) => {
           dueDate: '',
           pay: t.pay || 0,
         }));
-        mapped.forEach((m) => dispatch(addWorkerAssignment(m)));
+        mapped.forEach((m) => {
+          if (!existingIds.has(m.id)) {
+            dispatch(addWorkerAssignment(m));
+          }
+        });
       } catch (err) {
         console.log('worker:tasks:error', err?.response?.data || err.message);
       }

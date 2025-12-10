@@ -8497,6 +8497,43 @@ app.get('/api/monitoring/stats', (_req, res) => {
   }
 });
 
+app.get('/stripe/return', (req, res) => {
+  console.log('stripe:return', req.query || {});
+  const deeplink = process.env.MOBILE_DEEPLINK_URL;
+  if (deeplink) {
+    return res.send(`<!doctype html>
+    <html>
+      <head><meta charset="utf-8"><title>Connected</title></head>
+      <body>
+        <p>You’re all set. Returning to the app…</p>
+        <script>
+          window.location.href = ${JSON.stringify(deeplink)};
+        </script>
+      </body>
+    </html>`);
+  }
+  return res.send(`<!doctype html>
+  <html>
+    <head><meta charset="utf-8"><title>Stripe Connected</title></head>
+    <body>
+      <h1>Bank account connected</h1>
+      <p>You can now return to the Ninofi app.</p>
+    </body>
+  </html>`);
+});
+
+app.get('/stripe/refresh', (req, res) => {
+  console.log('stripe:refresh', req.query || {});
+  return res.send(`<!doctype html>
+  <html>
+    <head><meta charset="utf-8"><title>Try again</title></head>
+    <body>
+      <h1>Let’s try that again</h1>
+      <p>Your Stripe onboarding wasn’t completed. Please go back to the app and restart the Connect Bank process.</p>
+    </body>
+  </html>`);
+});
+
 // Legacy endpoints retained for compatibility
 app.post('/api/users', async (req, res) => {
   try {

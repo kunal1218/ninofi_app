@@ -215,7 +215,7 @@ const HomeownerDashboard = ({ navigation }) => {
             <TouchableOpacity
               style={styles.actionButton}
               onPress={handleConnectBank}
-              disabled={isConnectingStripe}
+              disabled={isConnectingStripe || isStripeConnected}
             >
               <Text style={styles.actionIcon}>🏦</Text>
               <Text
@@ -224,7 +224,7 @@ const HomeownerDashboard = ({ navigation }) => {
                 adjustsFontSizeToFit
                 minimumFontScale={0.85}
               >
-                {isConnectingStripe ? 'Opening...' : 'Connect Bank'}
+                {isStripeConnected ? 'Bank Connected' : isConnectingStripe ? 'Opening...' : 'Connect Bank'}
               </Text>
             </TouchableOpacity>
             {isStripeConnected && (

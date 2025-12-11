@@ -15,18 +15,6 @@ export default function TabLayout() {
   const isAdmin = isAuthenticated && isAdminUser(auth.user);
   const tabKey = `${isAuthenticated ? auth.user?.id || 'user' : 'guest'}:${isAdmin ? 'admin' : 'user'}`;
 
-  const adminTabOptions = isAdmin
-    ? {
-        title: 'Admin',
-        tabBarIcon: ({ color, size }) => (
-          <Ionicons name="shield-checkmark" color={color} size={size ?? 24} />
-        ),
-      }
-    : {
-        href: null,
-        tabBarButton: () => null,
-      };
-
   return (
     <Tabs
       key={tabKey}
@@ -45,9 +33,19 @@ export default function TabLayout() {
           ),
         }}
       />
+      {isAuthenticated && isAdmin && (
+        <Tabs.Screen
+          name="admin"
+          options={{
+            title: 'Admin',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="shield-checkmark" color={color} size={size ?? 24} />
+            ),
+          }}
+        />
+      )}
       {isAuthenticated && (
         <>
-          <Tabs.Screen name="admin" options={adminTabOptions} />
           <Tabs.Screen
             name="invoices"
             options={{

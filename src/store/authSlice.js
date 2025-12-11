@@ -93,8 +93,14 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase('persist/REHYDRATE', (state) => {
-      // Do not persist admin mode; require fresh login to enable it.
+      // Ignore any persisted auth; require a fresh login every app start.
+      state.user = null;
+      state.token = null;
+      state.isAuthenticated = false;
+      state.role = null;
       state.isAdmin = false;
+      state.isLoading = false;
+      state.error = null;
     });
   },
 });

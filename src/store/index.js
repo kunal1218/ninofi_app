@@ -40,3 +40,5 @@ export const store = configureStore({
 });
 
 export const persistor = persistStore(store);
+// Purge any previously persisted auth to avoid stale admin state
+persistor.purge();

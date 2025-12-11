@@ -25,6 +25,8 @@ const ContractorProjectDetailsScreen = ({ route, navigation }) => {
     project?.owner?.id &&
     user?.id &&
     project.assignedContractor.id === user.id;
+  const canLeaveProject =
+    canLeave || project?.assignedContractor?.id === user?.id || (user?.role || '').toLowerCase() === 'contractor';
 
   if (!project) {
     return (
@@ -150,7 +152,7 @@ const ContractorProjectDetailsScreen = ({ route, navigation }) => {
         </View>
       </ScrollView>
 
-      {(canApply || canLeave || (project?.assignedContractor?.id === user?.id)) && (
+      {(canApply || canLeaveProject) && (
         <View style={styles.footer}>
           {canChat && (
             <TouchableOpacity
@@ -171,7 +173,7 @@ const ContractorProjectDetailsScreen = ({ route, navigation }) => {
               </Text>
             </TouchableOpacity>
           )}
-          {(canLeave || project?.assignedContractor?.id === user?.id) && (
+          {canLeaveProject && (
             <TouchableOpacity
               style={[styles.leaveButton, isLeaving ? styles.leaveDisabled : null]}
               onPress={handleLeave}

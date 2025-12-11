@@ -296,6 +296,22 @@ const CreateProjectScreen = ({ navigation, route }) => {
       if (!coords?.latitude || !coords?.longitude) {
         throw new Error('Could not read current location.');
       }
+      const [geo] = (await Location.reverseGeocodeAsync(coords)) || [];
+      const composedAddress = geo
+        ? [
+            geo.name,
+            geo.street,
+            geo.city,
+            geo.region,
+            geo.postalCode,
+            geo.country,
+          ]
+            .filter(Boolean)
+            .join(', ')
+        : '';
+      if (composedAddress) {
+        updateField('address', composedAddress);
+      }
       setJobSiteLatitude(coords.latitude);
       setJobSiteLongitude(coords.longitude);
       setLocationVerified(true);

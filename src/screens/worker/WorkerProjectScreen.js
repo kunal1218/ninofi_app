@@ -6,6 +6,7 @@ import { projectAPI } from '../../services/api';
 import { useSelector, useDispatch } from 'react-redux';
 import { addWorkerAssignment, addWorkerProject, removeWorkerProject, updateWorkerAssignment } from '../../store/projectSlice';
 import CheckInButton from '../../components/CheckInButton';
+import { Image } from 'react-native';
 
 const WorkerProjectScreen = ({ route, navigation }) => {
   const { projectId } = route.params || {};
@@ -126,9 +127,10 @@ const WorkerProjectScreen = ({ route, navigation }) => {
             <Text style={styles.muted}>No attachments.</Text>
           ) : (
             attachments.map((m, idx) => (
-              <Text key={`${m.id || m.url || 'att'}-${idx}`} style={styles.link}>
-                {m.label || 'Attachment'} - {m.url}
-              </Text>
+              <View key={`${m.id || m.url || 'att'}-${idx}`} style={styles.attachmentRow}>
+                <Image source={{ uri: m.url }} style={styles.attachmentImage} />
+                <Text style={styles.link}>{m.label || 'Attachment'}</Text>
+              </View>
             ))
           )}
         </View>

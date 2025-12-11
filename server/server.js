@@ -1214,9 +1214,24 @@ const mapProjectRow = (row = {}, milestones = [], media = []) => ({
   acceptedApplicationId: row.accepted_app_id,
 });
 
+const toAbsoluteUrl = (raw = '') => {
+  if (!raw) return raw;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const base =
+    (process.env.RAILWAY_STATIC_URL &&
+      process.env.RAILWAY_STATIC_URL.startsWith('http') &&
+      process.env.RAILWAY_STATIC_URL) ||
+    (process.env.EXPO_PUBLIC_API_URL &&
+      process.env.EXPO_PUBLIC_API_URL.replace(/\/api$/, ''));
+  if (!base) return raw;
+  const prefix = base.endsWith('/') ? base.slice(0, -1) : base;
+  const path = raw.startsWith('/') ? raw : `/${raw}`;
+  return `${prefix}${path}`;
+};
+
 const mapMediaRow = (row = {}) => ({
   id: row.id,
-  url: row.url,
+  url: toAbsoluteUrl(row.url || ''),
   label: row.label || '',
 });
 
@@ -2240,7 +2255,7 @@ const stripExistingSignaturesSection = (text = '') => {
 const persistMedia = async (projectId, mediaItems = []) => {
   const saved = [];
   for (const item of mediaItems) {
-    if (!item.url) continue;
+    if (!item?.url) continue;
     if (!isDataUri(item.url)) {
       saved.push({ url: item.url, label: item.label || '' });
       continue;
@@ -2252,12 +2267,10 @@ const persistMedia = async (projectId, mediaItems = []) => {
       const mimeType = mimeMatch?.[1] || 'image/jpeg';
       const extension = mimeType.split('/')[1] || 'jpg';
       const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${extension}`;
-      const projectDir = path.join(UPLOAD_DIR, projectId);
-      await fs.promises.mkdir(projectDir, { recursive: true });
-      const filePath = path.join(projectDir, filename);
-      await fs.promises.writeFile(filePath, base64Data || '', 'base64');
-      const relativePath = path.relative(__dirname, filePath);
-      saved.push({ url: `/${relativePath}`, label: item.label || '' });
+      const storageKey = `projects/${projectId}/${filename}`;
+      const uploadResult = await storageService.uploadFile(storageKey, base64Data || '', mimeType);
+      const signed = await storageService.getSignedUrl(uploadResult.key || storageKey);
+      saved.push({ url: signed?.url || uploadResult.url || item.url, label: item.label || '' });
     } catch (err) {
       console.error('Error saving media file:', err);
     }

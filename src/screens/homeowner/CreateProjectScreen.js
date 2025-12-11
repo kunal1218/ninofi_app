@@ -392,40 +392,18 @@ const CreateProjectScreen = ({ navigation, route }) => {
       />
 
       <Text style={styles.label}>Project Address *</Text>
-      <View style={styles.addressRow}>
-        <TextInput
-          style={[styles.input, styles.addressInput]}
-          placeholder="Enter project location"
-          value={formData.address}
-          onChangeText={(value) => updateField('address', value)}
-        />
-        <TouchableOpacity
-          style={[
-            styles.verifyButton,
-            (!formData.address || verifyingLocation) && styles.verifyButtonDisabled,
-          ]}
-          onPress={verifyLocation}
-          disabled={!formData.address || verifyingLocation}
-        >
-          {verifyingLocation ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.verifyButtonText}>Verify</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-      <View style={styles.locationStatusRow}>
-        {verifyingLocation ? (
-          <>
-            <ActivityIndicator size="small" color={palette.primary} />
-            <Text style={styles.statusText}>Verifying location...</Text>
-          </>
-        ) : locationVerified ? (
-          <Text style={styles.verifiedText}>✓ Location verified</Text>
-        ) : (
-          <Text style={styles.warningText}>Recommended: Verify location for GPS check-ins</Text>
-        )}
-      </View>
+      <TextInput
+        style={styles.input}
+        placeholder="Enter project location"
+        value={formData.address}
+        onChangeText={(value) => updateField('address', value)}
+      />
+      {verifyingLocation && (
+        <View style={styles.locationStatusRow}>
+          <ActivityIndicator size="small" color={palette.primary} />
+          <Text style={styles.statusText}>Verifying location...</Text>
+        </View>
+      )}
       <TouchableOpacity style={styles.useCurrentButton} onPress={useCurrentLocation}>
         <Text style={styles.useCurrentText}>Use Current Location</Text>
       </TouchableOpacity>
@@ -738,35 +716,6 @@ const styles = StyleSheet.create({
   textArea: {
     height: 100,
     textAlignVertical: 'top',
-  },
-  addressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  addressInput: {
-    flex: 1,
-  },
-  verifyButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: palette.primary,
-    borderRadius: 12,
-    minWidth: 90,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#111827',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
-  },
-  verifyButtonDisabled: {
-    backgroundColor: palette.border,
-  },
-  verifyButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
   },
   locationStatusRow: {
     flexDirection: 'row',

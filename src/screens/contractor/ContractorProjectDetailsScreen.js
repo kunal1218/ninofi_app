@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { applyToProject, leaveProject } from '../../services/projects';
 import palette from '../../styles/palette';
@@ -111,6 +112,22 @@ const ContractorProjectDetailsScreen = ({ route, navigation }) => {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Description</Text>
           <Text style={styles.body}>{project.description || 'No description provided.'}</Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Media</Text>
+          {project.media && project.media.length ? (
+            project.media.map((m) => (
+              <Image
+                key={m.id || m.url}
+                source={{ uri: m.url }}
+                style={styles.mediaImage}
+                resizeMode="cover"
+              />
+            ))
+          ) : (
+            <Text style={styles.muted}>No media added.</Text>
+          )}
         </View>
 
         <View style={styles.card}>

@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import palette from '../../styles/palette';
 import { projectAPI } from '../../services/api';
-import { addWorkerAssignment, removeWorkerProject } from '../../store/projectSlice';
+import { addWorkerAssignment, addWorkerProject, removeWorkerProject } from '../../store/projectSlice';
 
 const WorkerGigsScreen = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -57,6 +57,8 @@ const WorkerGigsScreen = ({ navigation }) => {
         const mapped = tasks.map((t) => ({
           id: t.id,
           projectId: t.projectId,
+          projectTitle: t.projectTitle,
+          projectDescription: t.projectDescription,
           workerId: user?.id,
           description: t.description,
           dueDate: t.dueDate || '',
@@ -67,6 +69,15 @@ const WorkerGigsScreen = ({ navigation }) => {
         mapped.forEach((m) => {
           if (!existingIds.has(m.id)) {
             dispatch(addWorkerAssignment(m));
+          }
+          if (m.projectId) {
+            dispatch(
+              addWorkerProject({
+                id: m.projectId,
+                title: m.projectTitle || '',
+                description: m.projectDescription || '',
+              })
+            );
           }
         });
       } catch (err) {
@@ -93,6 +104,20 @@ const WorkerGigsScreen = ({ navigation }) => {
       seen.add(p.id);
     }
   });
+  // Include projects that came only via assigned tasks
+  workerAssignments
+    .filter((a) => a.projectId && a.workerId === user?.id)
+    .forEach((a) => {
+      if (!seen.has(a.projectId)) {
+        const taskProject = (workerProjects || []).find((p) => p.id === a.projectId);
+        cards.push({
+          id: a.projectId,
+          title: taskProject?.title || 'Project',
+          description: taskProject?.description || '',
+        });
+        seen.add(a.projectId);
+      }
+    });
   acceptedApps.forEach((a) => {
     const pid = a.project_id || a.projectId;
     if (pid && !seen.has(pid)) {

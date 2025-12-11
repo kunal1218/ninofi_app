@@ -11,11 +11,7 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const auth = useSelector((state: any) => state.auth || {});
   const isAuthenticated = auth.isAuthenticated;
-  const user = auth.user;
-  const isAdmin =
-    auth.isAdmin ||
-    user?.isAdmin ||
-    (user?.userRole || '').toUpperCase() === 'ADMIN';
+  const isAdmin = !!auth.isAdmin;
 
   return (
     <Tabs

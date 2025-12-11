@@ -73,13 +73,9 @@ const authSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
-    builder.addCase('persist/REHYDRATE', (state, action) => {
-      const incoming = action.payload;
-      if (incoming?.user || incoming?.token) {
-        state.isAdmin = isAdminFromUser(incoming.user);
-      } else {
-        state.isAdmin = false;
-      }
+    builder.addCase('persist/REHYDRATE', (state) => {
+      // Do not persist admin mode; require fresh login to enable it.
+      state.isAdmin = false;
     });
   },
 });

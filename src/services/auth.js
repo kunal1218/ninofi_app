@@ -17,6 +17,7 @@ export const login = (email, password) => async (dispatch) => {
     const response = await authAPI.login(email, password);
     dispatch(loginSuccess(response.data));
     setAuthToken(response.data?.token);
+    await AsyncStorage.removeItem('persist:auth'); // drop any stale persisted admin flag
     return { success: true };
   } catch (error) {
     const errorMessage = error.response?.data?.message || 'Login failed';

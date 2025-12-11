@@ -20,10 +20,7 @@ const ProfileScreen = ({ navigation: propNavigation }) => {
   const navigation = propNavigation || useNavigation();
   const router = useRouter();
   const { user, role, isAuthenticated, isAdmin: adminFlag } = useSelector((state) => state.auth);
-  const isAdmin =
-    adminFlag ||
-    user?.isAdmin ||
-    (user?.userRole || '').toUpperCase() === 'ADMIN';
+  const isAdmin = !!adminFlag;
   const dispatch = useDispatch();
   const hasNavigation = Boolean(navigation);
 

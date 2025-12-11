@@ -11,10 +11,7 @@ const Stack = createStackNavigator();
 export default function AdminTab() {
   const auth = useSelector((state: any) => state.auth || {});
   const isAuthenticated = !!auth.isAuthenticated;
-  const isAdmin =
-    auth.isAdmin ||
-    auth.user?.isAdmin ||
-    (auth.user?.userRole || '').toUpperCase() === 'ADMIN';
+  const isAdmin = !!auth.isAdmin;
 
   useEffect(() => {
     if (!isAuthenticated || !isAdmin) {

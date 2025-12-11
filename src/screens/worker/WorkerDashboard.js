@@ -17,6 +17,7 @@ import palette from '../../styles/palette';
 import CheckInButton from '../../components/CheckInButton';
 import { loadNotifications } from '../../services/notifications';
 import { createConnectAccountLink, fetchStripeStatus } from '../../services/payments';
+import { addNotification } from '../../store/notificationSlice';
 
 const WorkerDashboard = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -25,6 +26,7 @@ const WorkerDashboard = ({ navigation }) => {
   const unreadCount = notifications.filter((n) => !n.read).length;
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [stripeStatus, setStripeStatus] = useState(null);
+  const prevStripeStatusRef = useRef(null);
   const isStripeConnected = !!(
     (stripeStatus?.accountId || user?.stripe_account_id) &&
     (
@@ -53,13 +55,45 @@ const WorkerDashboard = ({ navigation }) => {
     }
   }, [dispatch, user?.id]);
 
+  const syncStripeNotification = useCallback(
+    (status) => {
+      const connected = !!(
+        (status?.accountId || user?.stripe_account_id) &&
+        (status?.payoutsEnabled || status?.chargesEnabled || user?.stripePayoutsEnabled || user?.stripeChargesEnabled)
+      );
+      const prev = prevStripeStatusRef.current;
+      const changed =
+        !prev ||
+        prev.connected !== connected ||
+        prev.payoutsEnabled !== status?.payoutsEnabled ||
+        prev.chargesEnabled !== status?.chargesEnabled;
+      if (changed) {
+        dispatch(
+          addNotification({
+            title: 'Stripe status',
+            body: connected ? 'Bank connected and ready.' : 'Stripe onboarding pending verification.',
+            read: false,
+            createdAt: new Date().toISOString(),
+          })
+        );
+        prevStripeStatusRef.current = {
+          connected,
+          payoutsEnabled: status?.payoutsEnabled,
+          chargesEnabled: status?.chargesEnabled,
+        };
+      }
+    },
+    [dispatch, user?.stripe_account_id, user?.stripeChargesEnabled, user?.stripePayoutsEnabled]
+  );
+
   const loadStripeStatus = useCallback(async () => {
     if (!user?.id) return;
     const res = await fetchStripeStatus(user.id);
     if (res.success) {
       setStripeStatus(res.data);
+      syncStripeNotification(res.data);
     }
-  }, [user?.id]);
+  }, [user?.id, syncStripeNotification]);
 
   const handleConnectBank = useCallback(async () => {
     if (!user?.id) {
@@ -75,6 +109,7 @@ const WorkerDashboard = ({ navigation }) => {
     }
     if (res.data) {
       setStripeStatus(res.data);
+      syncStripeNotification(res.data);
     }
     const url = res.data?.url;
     if (url) {

@@ -19,6 +19,7 @@ import { loadContractorProjects, loadOpenProjects } from '../../services/project
 import { createConnectAccountLink, fetchStripeStatus } from '../../services/payments';
 import palette from '../../styles/palette';
 import { shadowCard } from '../../styles/ui';
+import { addNotification } from '../../store/notificationSlice';
 
 const ContractorDashboard = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -31,6 +32,7 @@ const ContractorDashboard = ({ navigation }) => {
   const [hasSeenConnected, setHasSeenConnected] = useState(false);
   const [hasSeenLoaded, setHasSeenLoaded] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
+  const prevStripeStatusRef = useRef(null);
   const stats = {
     earnings: 8450,
     activeProjects: 0,
@@ -66,6 +68,26 @@ const ContractorDashboard = ({ navigation }) => {
     if (!res.success) {
       Alert.alert('Error', res.error || 'Failed to start Stripe onboarding');
       return;
+    }
+    if (res.data) {
+      setStripeStatus(res.data);
+      const connectedNow = !!(
+        (res.data.accountId || user?.stripeAccountId) &&
+        (res.data.payoutsEnabled || res.data.chargesEnabled || user?.stripePayoutsEnabled || user?.stripeChargesEnabled)
+      );
+      dispatch(
+        addNotification({
+          title: 'Stripe status',
+          body: connectedNow ? 'Bank connected and ready.' : 'Stripe onboarding pending verification.',
+          read: false,
+          createdAt: new Date().toISOString(),
+        })
+      );
+      prevStripeStatusRef.current = {
+        connected: connectedNow,
+        payoutsEnabled: res.data.payoutsEnabled,
+        chargesEnabled: res.data.chargesEnabled,
+      };
     }
     const url = res.data?.url;
     if (url) {
@@ -114,6 +136,44 @@ const ContractorDashboard = ({ navigation }) => {
     }
     lastConnectedRef.current = isStripeConnected;
   }, [hasSeenConnected, hasSeenLoaded, isStripeConnected]);
+
+  useEffect(() => {
+    const status = stripeStatus;
+    const connectedNow = !!(
+      (status?.accountId || user?.stripeAccountId) &&
+      (status?.payoutsEnabled || status?.chargesEnabled || user?.stripePayoutsEnabled || user?.stripeChargesEnabled)
+    );
+    const prev = prevStripeStatusRef.current;
+    const changed =
+      status &&
+      (!prev ||
+        prev.connected !== connectedNow ||
+        prev.payoutsEnabled !== status?.payoutsEnabled ||
+        prev.chargesEnabled !== status?.chargesEnabled);
+    if (changed) {
+      dispatch(
+        addNotification({
+          title: 'Stripe status',
+          body: connectedNow ? 'Bank connected and ready.' : 'Stripe onboarding pending verification.',
+          read: false,
+          createdAt: new Date().toISOString(),
+        })
+      );
+      prevStripeStatusRef.current = {
+        connected: connectedNow,
+        payoutsEnabled: status?.payoutsEnabled,
+        chargesEnabled: status?.chargesEnabled,
+      };
+    }
+  }, [
+    stripeStatus?.accountId,
+    stripeStatus?.payoutsEnabled,
+    stripeStatus?.chargesEnabled,
+    user?.stripeAccountId,
+    user?.stripeChargesEnabled,
+    user?.stripePayoutsEnabled,
+    dispatch,
+  ]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {

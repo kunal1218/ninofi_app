@@ -3574,25 +3574,39 @@ app.post('/api/projects/:projectId/leave', async (req, res) => {
       appRow.owner_id,
     ]);
 
-    const notificationId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
-    await client.query(
-      `
-        INSERT INTO notifications (id, user_id, title, body, data)
-        VALUES ($1, $2, $3, $4, $5)
-      `,
-      [
-        notificationId,
-        appRow.owner_id,
-        `${appRow.contractor_full_name || 'Contractor'} has left ${appRow.project_title}`,
-        `${appRow.contractor_full_name || 'Contractor'} has left ${appRow.project_title}.`,
-        JSON.stringify({
-          contractorId,
-          projectId,
-          applicationId: appRow.id,
-          status: 'withdrawn',
-        }),
-      ]
-    );
+    const participants = await getProjectParticipants(projectId);
+    const notifyIds = new Set();
+    if (participants?.ownerId) notifyIds.add(participants.ownerId);
+    if (participants?.contractorId && participants.contractorId !== participants.ownerId) {
+      notifyIds.add(participants.contractorId);
+    }
+    (participants?.workers || []).forEach((wid) => {
+      if (wid && wid !== contractorId) notifyIds.add(wid);
+    });
+    const notifTitle = `${appRow.contractor_full_name || 'Contractor'} has left ${appRow.project_title}`;
+    const notifBody = `${appRow.contractor_full_name || 'Contractor'} has left ${appRow.project_title}.`;
+    for (const uid of notifyIds) {
+      const notificationId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+      await client.query(
+        `
+          INSERT INTO notifications (id, user_id, title, body, data)
+          VALUES ($1, $2, $3, $4, $5)
+        `,
+        [
+          notificationId,
+          uid,
+          notifTitle,
+          notifBody,
+          JSON.stringify({
+            contractorId,
+            projectId,
+            applicationId: appRow.id,
+            status: 'withdrawn',
+            type: 'contractor-left',
+          }),
+        ]
+      );
+    }
 
     await client.query('COMMIT');
     return res.json({ status: 'withdrawn', projectId, applicationId: appRow.id });

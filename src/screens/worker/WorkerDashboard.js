@@ -9,7 +9,7 @@ import {
     View,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import palette from '../../styles/palette';

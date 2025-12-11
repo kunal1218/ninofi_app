@@ -6,20 +6,14 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { HapticTab } from '@/components/haptic-tab';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { isAdminUser } from '../../src/utils/auth';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const auth = useSelector((state: any) => state.auth || {});
   const isAuthenticated = auth.isAuthenticated === true;
-  const isAdmin =
-    isAuthenticated &&
-    auth.isAdmin === true &&
-    (auth.user?.userRole || auth.user?.role || '').toUpperCase() === 'ADMIN';
-  const tabKey = isAuthenticated
-    ? isAdmin
-      ? 'app-tabs-admin'
-      : 'app-tabs-user'
-    : 'guest-tabs';
+  const isAdmin = isAuthenticated && isAdminUser(auth.user);
+  const tabKey = `${isAuthenticated ? auth.user?.id || 'user' : 'guest'}:${isAdmin ? 'admin' : 'user'}`;
 
   const adminTabOptions = isAdmin
     ? {

@@ -5,16 +5,14 @@ import { router } from 'expo-router';
 import AdminTasksScreen from '../../src/screens/admin/AdminTasksScreen';
 import AdminDashboardScreen from '../../src/screens/admin/AdminDashboardScreen';
 import AdminModerationScreen from '../../src/screens/admin/AdminModerationScreen';
+import { isAdminUser } from '../../src/utils/auth';
 
 const Stack = createStackNavigator();
 
 export default function AdminTab() {
   const auth = useSelector((state: any) => state.auth || {});
   const isAuthenticated = auth.isAuthenticated === true;
-  const isAdmin =
-    isAuthenticated &&
-    auth.isAdmin === true &&
-    (auth.user?.userRole || auth.user?.role || '').toUpperCase() === 'ADMIN';
+  const isAdmin = isAuthenticated && isAdminUser(auth.user);
 
   useEffect(() => {
     if (!isAuthenticated || !isAdmin) {

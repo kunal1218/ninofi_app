@@ -24,7 +24,6 @@ export default function TabLayout() {
       }
     : {
         href: null,
-        tabBarButton: () => null,
       };
 
   return (

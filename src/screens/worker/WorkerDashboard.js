@@ -15,7 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import palette from '../../styles/palette';
 import CheckInButton from '../../components/CheckInButton';
 import { loadNotifications } from '../../services/notifications';
-import { createConnectAccountLink } from '../../services/payments';
+import { createConnectAccountLink, fetchStripeStatus } from '../../services/payments';
 
 const WorkerDashboard = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -23,8 +23,12 @@ const WorkerDashboard = ({ navigation }) => {
   const { items: notifications } = useSelector((state) => state.notifications);
   const unreadCount = notifications.filter((n) => !n.read).length;
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
-  const isStripeConnected =
-    !!(user?.stripe_account_id || user?.isStripeConnected || user?.stripeChargesEnabled || user?.stripePayoutsEnabled);
+  const [stripeStatus, setStripeStatus] = useState(null);
+  const isStripeConnected = !!(
+    (stripeStatus?.accountId || user?.stripe_account_id) &&
+    ((stripeStatus?.payoutsEnabled ?? user?.stripePayoutsEnabled) ||
+      (stripeStatus?.chargesEnabled ?? user?.stripeChargesEnabled))
+  );
   const [hasSeenConnected, setHasSeenConnected] = useState(false);
   const [hasSeenLoaded, setHasSeenLoaded] = useState(false);
   const lastConnectedRef = useRef(false);
@@ -43,6 +47,14 @@ const WorkerDashboard = ({ navigation }) => {
       // no-op
     }
   }, [dispatch, user?.id]);
+
+  const loadStripeStatus = useCallback(async () => {
+    if (!user?.id) return;
+    const res = await fetchStripeStatus(user.id);
+    if (res.success) {
+      setStripeStatus(res.data);
+    }
+  }, [user?.id]);
 
   const handleConnectBank = useCallback(async () => {
     if (!user?.id) {
@@ -64,16 +76,19 @@ const WorkerDashboard = ({ navigation }) => {
         Alert.alert('Error', 'Could not open Stripe onboarding link');
       }
     }
-  }, [user?.id]);
+    loadStripeStatus();
+  }, [user?.id, loadStripeStatus]);
 
   useEffect(() => {
     fetchNotifs();
-  }, [fetchNotifs]);
+    loadStripeStatus();
+  }, [fetchNotifs, loadStripeStatus]);
 
   useFocusEffect(
     useCallback(() => {
       fetchNotifs();
-    }, [fetchNotifs])
+      loadStripeStatus();
+    }, [fetchNotifs, loadStripeStatus])
   );
 
   useEffect(() => {

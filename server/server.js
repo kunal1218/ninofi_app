@@ -4958,7 +4958,7 @@ app.post('/api/stripe/connect/account-link', async (req, res) => {
     await assertDbReady();
     const userRow = await getUserById(contractorId);
     const userRole = (userRow.role || '').toLowerCase();
-    if (!userRow || !['contractor', 'worker'].includes(userRole)) {
+    if (!userRow || !['contractor', 'worker', 'homeowner'].includes(userRole)) {
       return res.status(404).json({ message: 'User not eligible for payouts' });
     }
 
@@ -5035,7 +5035,7 @@ app.get('/api/stripe/connect/status', async (req, res) => {
     await assertDbReady();
     const userRow = await getUserById(contractorId);
     const role = (userRow?.role || '').toLowerCase();
-    if (!userRow || !['contractor', 'worker'].includes(role)) {
+    if (!userRow || !['contractor', 'worker', 'homeowner'].includes(role)) {
       return res.status(404).json({ message: 'User not eligible for payouts' });
     }
     if (!userRow.stripe_account_id) {
@@ -5309,10 +5309,11 @@ app.get('/api/gigs/worker/:workerId/tasks', requireAuth, async (req, res) => {
         FROM tasks t
         JOIN projects p ON p.id = t.project_id
         WHERE t.worker_id = $1
+          AND t.status NOT IN ($2, $3, $4)
         ORDER BY t.created_at DESC
         LIMIT 100
       `,
-      [workerId]
+      [workerId, TASK_STATUSES.PAID_OUT, TASK_STATUSES.VERIFIED, TASK_STATUSES.CANCELLED]
     );
       const tasks = rows.rows.map((t) => ({
         id: t.id,

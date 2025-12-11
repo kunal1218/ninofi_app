@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { loadNotifications } from '../../services/notifications';
-import { createConnectAccountLink } from '../../services/payments';
+import { createConnectAccountLink, fetchStripeStatus } from '../../services/payments';
 import { loadProjectsForUser } from '../../services/projects';
 import palette from '../../styles/palette';
 
@@ -24,8 +24,11 @@ const HomeownerDashboard = ({ navigation }) => {
   const { items: notifications } = useSelector((state) => state.notifications);
   const unreadCount = notifications.filter((n) => !n.read).length;
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
+  const [stripeStatus, setStripeStatus] = useState(null);
   const isStripeConnected =
-    !!(user?.stripe_account_id || user?.isStripeConnected || user?.stripeChargesEnabled || user?.stripePayoutsEnabled);
+    !!((stripeStatus?.accountId || user?.stripe_account_id) &&
+    ((stripeStatus?.payoutsEnabled ?? user?.stripePayoutsEnabled) ||
+      (stripeStatus?.chargesEnabled ?? user?.stripeChargesEnabled)));
   const [hasSeenConnected, setHasSeenConnected] = useState(false);
   const [hasSeenLoaded, setHasSeenLoaded] = useState(false);
   const lastConnectedRef = useRef(false);
@@ -37,9 +40,18 @@ const HomeownerDashboard = ({ navigation }) => {
     }
   }, [dispatch, user?.id]);
 
+  const loadStripeStatus = useCallback(async () => {
+    if (!user?.id) return;
+    const res = await fetchStripeStatus(user.id);
+    if (res.success) {
+      setStripeStatus(res.data);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     fetchProjects();
-  }, [fetchProjects]);
+    loadStripeStatus();
+  }, [fetchProjects, loadStripeStatus]);
 
   useEffect(() => {
     const loadSeen = async () => {
@@ -67,7 +79,8 @@ const HomeownerDashboard = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       fetchProjects();
-    }, [fetchProjects])
+      loadStripeStatus();
+    }, [fetchProjects, loadStripeStatus])
   );
 
   const handleConnectBank = useCallback(async () => {
@@ -90,7 +103,8 @@ const HomeownerDashboard = ({ navigation }) => {
         Alert.alert('Error', 'Could not open Stripe onboarding link');
       }
     }
-  }, [user?.id]);
+    loadStripeStatus();
+  }, [user?.id, loadStripeStatus]);
 
   const stats = {
     activeProjects: projects?.length || 0,

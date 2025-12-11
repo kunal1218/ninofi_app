@@ -1117,19 +1117,25 @@ const assertDbReady = async () => {
   return dbReady;
 };
 
-const mapDbUser = (row = {}) => ({
-  id: row.id,
-  fullName: row.full_name,
-  email: row.email,
-  phone: row.phone || '',
-  role: row.role,
-  profilePhotoUrl: row.profile_photo_url || '',
-  rating: row.rating !== null && row.rating !== undefined ? Number(row.rating) : null,
-  createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
-  stripeAccountId: row.stripe_account_id || null,
-  stripeChargesEnabled: !!row.stripe_charges_enabled,
-  stripePayoutsEnabled: !!row.stripe_payouts_enabled,
-});
+const mapDbUser = (row = {}) => {
+  const adminRole = (row.user_role || '').toUpperCase();
+  const isAdmin = adminRole === 'ADMIN' || (row.role || '').toUpperCase() === 'ADMIN';
+  return {
+    id: row.id,
+    fullName: row.full_name,
+    email: row.email,
+    phone: row.phone || '',
+    role: row.role,
+    userRole: adminRole || 'USER',
+    isAdmin,
+    profilePhotoUrl: row.profile_photo_url || '',
+    rating: row.rating !== null && row.rating !== undefined ? Number(row.rating) : null,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    stripeAccountId: row.stripe_account_id || null,
+    stripeChargesEnabled: !!row.stripe_charges_enabled,
+    stripePayoutsEnabled: !!row.stripe_payouts_enabled,
+  };
+};
 
 const getUserByEmail = async (email) => {
   await assertDbReady();
@@ -2364,20 +2370,6 @@ const appendAudit = async ({
   } catch (err) {
     console.error('appendAudit error', err);
   }
-};
-
-const isAdminRequest = (req) => {
-  const key = req.headers['x-admin-key'] || req.body?.adminKey || req.query?.adminKey;
-  if (process.env.ADMIN_KEY && key && key === process.env.ADMIN_KEY) return true;
-  return false;
-};
-
-const requireAdminKey = (req, res) => {
-  if (!isAdminRequest(req)) {
-    res.status(403).json({ message: 'Admin access required' });
-    return false;
-  }
-  return true;
 };
 
 app.get('/', (req, res) => {
@@ -8525,9 +8517,8 @@ app.post('/api/compliance/check-expiry', async (_req, res) => {
   }
 });
 
-app.get('/api/admin/analytics', async (req, res) => {
+app.get('/api/admin/analytics', requireAdmin, async (req, res) => {
   try {
-    if (!requireAdminKey(req, res)) return;
     await assertDbReady();
     const projects = await pool.query('SELECT COUNT(*) FROM projects');
     const users = await pool.query('SELECT COUNT(*) FROM users');
@@ -8546,11 +8537,10 @@ app.get('/api/admin/analytics', async (req, res) => {
   }
 });
 
-app.get('/api/admin/users', async (req, res) => {
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
   try {
-    if (!requireAdminKey(req, res)) return;
     await assertDbReady();
-    const result = await pool.query('SELECT id, full_name, email, role, created_at, profile_photo_url FROM users ORDER BY created_at DESC LIMIT 200');
+    const result = await pool.query('SELECT id, full_name, email, role, user_role, created_at, profile_photo_url FROM users ORDER BY created_at DESC LIMIT 200');
     return res.json(result.rows.map(mapDbUser));
   } catch (error) {
     logError('admin:users:error', {}, error);
@@ -8559,9 +8549,8 @@ app.get('/api/admin/users', async (req, res) => {
   }
 });
 
-app.get('/api/admin/disputes', async (req, res) => {
+app.get('/api/admin/disputes', requireAdmin, async (req, res) => {
   try {
-    if (!requireAdminKey(req, res)) return;
     await assertDbReady();
     const result = await pool.query('SELECT * FROM disputes ORDER BY created_at DESC LIMIT 200');
     return res.json(result.rows.map(mapDisputeRow));
@@ -8572,9 +8561,8 @@ app.get('/api/admin/disputes', async (req, res) => {
   }
 });
 
-app.post('/api/admin/disputes/:id/resolve', async (req, res) => {
+app.post('/api/admin/disputes/:id/resolve', requireAdmin, async (req, res) => {
   try {
-    if (!requireAdminKey(req, res)) return;
     const { id } = req.params;
     const { status, resolutionNotes } = req.body || {};
     if (!id || !status) {
@@ -8735,9 +8723,8 @@ app.get('/api/contractors/:contractorId/profile', async (req, res) => {
   }
 });
 
-app.get('/api/admin/flags', async (req, res) => {
+app.get('/api/admin/flags', requireAdmin, async (req, res) => {
   try {
-    if (!requireAdminKey(req, res)) return;
     await assertDbReady();
     const result = await pool.query('SELECT * FROM flags ORDER BY created_at DESC LIMIT 200');
     return res.json(result.rows);
@@ -8748,9 +8735,8 @@ app.get('/api/admin/flags', async (req, res) => {
   }
 });
 
-app.post('/api/admin/flags/:id/resolve', async (req, res) => {
+app.post('/api/admin/flags/:id/resolve', requireAdmin, async (req, res) => {
   try {
-    if (!requireAdminKey(req, res)) return;
     const { id } = req.params;
     await assertDbReady();
     await pool.query("UPDATE flags SET status = 'resolved', updated_at = NOW() WHERE id = $1", [id]);

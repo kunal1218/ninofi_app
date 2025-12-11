@@ -7,6 +7,7 @@ const initialState = {
   isLoading: false,
   error: null,
   role: null, // 'homeowner', 'contractor', 'worker'
+  isAdmin: false,
 };
 
 const authSlice = createSlice({
@@ -23,6 +24,9 @@ const authSlice = createSlice({
       state.user = action.payload.user;
       state.token = action.payload.token;
       state.role = action.payload.user.role;
+      state.isAdmin =
+        !!action.payload.user?.isAdmin ||
+        (action.payload.user?.userRole || '').toUpperCase() === 'ADMIN';
       state.error = null;
     },
     loginFailure: (state, action) => {
@@ -39,6 +43,9 @@ const authSlice = createSlice({
       state.user = action.payload.user;
       state.token = action.payload.token;
       state.role = action.payload.user.role;
+      state.isAdmin =
+        !!action.payload.user?.isAdmin ||
+        (action.payload.user?.userRole || '').toUpperCase() === 'ADMIN';
       state.error = null;
     },
     registerFailure: (state, action) => {
@@ -50,6 +57,7 @@ const authSlice = createSlice({
       state.token = null;
       state.isAuthenticated = false;
       state.role = null;
+      state.isAdmin = false;
       state.error = null;
     },
     setRole: (state, action) => {

@@ -270,9 +270,12 @@ const CreateProjectScreen = ({ navigation, route }) => {
       setJobSiteLongitude(first.longitude);
       setLocationVerified(true);
     } catch (error) {
-      console.error('verifyLocation:error', error);
+      console.warn('verifyLocation:error', error);
       setLocationVerified(false);
-      Alert.alert('Location not found', error?.message || 'Could not verify this address.');
+      Alert.alert(
+        'Location not found',
+        'Try adding city/state/zip, or tap "Use Current Location" instead.'
+      );
     } finally {
       setVerifyingLocation(false);
     }

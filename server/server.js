@@ -8,6 +8,7 @@ const Stripe = require('stripe');
 const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
+const { getDistance } = require('geolib');
 const { runGeminiPrompt } = require('./geminiClient');
 require('dotenv').config();
 const asyncHandler = require('./utils/asyncHandler');
@@ -506,11 +507,19 @@ const initDb = async () => {
       project_type TEXT,
       description TEXT,
       estimated_budget NUMERIC,
+      job_site_latitude NUMERIC,
+      job_site_longitude NUMERIC,
+      check_in_radius INTEGER NOT NULL DEFAULT 200,
       timeline TEXT,
       address TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query('ALTER TABLE projects ADD COLUMN IF NOT EXISTS job_site_latitude NUMERIC');
+  await pool.query('ALTER TABLE projects ADD COLUMN IF NOT EXISTS job_site_longitude NUMERIC');
+  await pool.query(
+    'ALTER TABLE projects ADD COLUMN IF NOT EXISTS check_in_radius INTEGER NOT NULL DEFAULT 200'
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS milestones (
@@ -665,6 +674,24 @@ const initDb = async () => {
   await pool.query(
     'CREATE INDEX IF NOT EXISTS project_media_project_id_idx ON project_media (project_id)'
   );
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS check_ins (
+      id UUID PRIMARY KEY,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      user_type TEXT,
+      check_in_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      latitude NUMERIC,
+      longitude NUMERIC,
+      distance_from_site INTEGER,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS check_ins_project_idx ON check_ins (project_id, check_in_time DESC)'
+  );
+  await pool.query('CREATE INDEX IF NOT EXISTS check_ins_user_idx ON check_ins (user_id)');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS project_applications (
@@ -6100,8 +6127,188 @@ app.get('/api/work-hours/project/:projectId/summary', async (req, res) => {
     return res.status(500).json({ message });
   }
 });
+  
+  app.post('/api/check-in', async (req, res) => {
+    try {
+      const { projectId, userId, userType, latitude, longitude } = req.body || {};
+      if (!projectId || !isUuid(projectId)) {
+        return res.status(400).json({ success: false, message: 'Valid projectId is required' });
+      }
+      if (!userId || !isUuid(userId)) {
+        return res.status(400).json({ success: false, message: 'Valid userId is required' });
+      }
+      const lat = Number(latitude);
+      const lon = Number(longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        return res
+          .status(400)
+          .json({ success: false, message: 'Valid latitude and longitude are required' });
+      }
 
-app.get('/api/projects/:projectId/messages', async (req, res) => {
+      await assertDbReady();
+      const projectResult = await pool.query(
+        `
+          SELECT job_site_latitude, job_site_longitude, check_in_radius
+          FROM projects
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [projectId]
+      );
+      if (projectResult.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Project not found' });
+      }
+      const projectRow = projectResult.rows[0];
+      const siteLat = Number(projectRow.job_site_latitude);
+      const siteLon = Number(projectRow.job_site_longitude);
+      if (!Number.isFinite(siteLat) || !Number.isFinite(siteLon)) {
+        return res
+          .status(400)
+          .json({ success: false, message: 'Project has no job site coordinates set' });
+      }
+      const allowedRadius = Number(projectRow.check_in_radius) || 200;
+
+      const distance = getDistance(
+        { latitude: lat, longitude: lon },
+        { latitude: siteLat, longitude: siteLon }
+      );
+      if (!Number.isFinite(distance)) {
+        return res.status(400).json({ success: false, message: 'Could not calculate distance' });
+      }
+      if (distance > allowedRadius) {
+        return res.status(403).json({
+          success: false,
+          message: 'User is outside the allowed check-in radius',
+          distance,
+          allowedRadius,
+        });
+      }
+
+      const checkInId = crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
+      const insertResult = await pool.query(
+        `
+          INSERT INTO check_ins (id, project_id, user_id, user_type, latitude, longitude, distance_from_site)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING check_in_time
+        `,
+        [checkInId, projectId, userId, userType || null, lat, lon, distance]
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: 'Check-in recorded',
+        checkInId,
+        checkInTime: insertResult.rows?.[0]?.check_in_time || new Date().toISOString(),
+        distance,
+        allowedRadius,
+      });
+    } catch (error) {
+      logError('check-in:create:error', { body: req.body }, error);
+      const message = pool ? 'Failed to record check-in' : 'Database is not configured (set DATABASE_URL)';
+      return res.status(500).json({ success: false, message });
+    }
+  });
+
+  app.get('/api/check-ins/:projectId', async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      if (!projectId || !isUuid(projectId)) {
+        return res.status(400).json({ message: 'Invalid projectId' });
+      }
+
+      await assertDbReady();
+      const project = await getProjectById(projectId);
+      if (!project) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      const result = await pool.query(
+        `
+          SELECT
+            ci.id,
+            ci.user_type,
+            ci.check_in_time,
+            ci.distance_from_site,
+            ci.latitude,
+            ci.longitude,
+            u.full_name AS user_name
+          FROM check_ins ci
+          LEFT JOIN users u ON u.id = ci.user_id
+          WHERE ci.project_id = $1
+          ORDER BY ci.check_in_time DESC
+        `,
+        [projectId]
+      );
+
+      const rows = result.rows.map((row) => ({
+        id: row.id,
+        userName: row.user_name || 'Unknown',
+        userType: row.user_type || '',
+        checkInTime:
+          row.check_in_time instanceof Date ? row.check_in_time.toISOString() : row.check_in_time,
+        distance:
+          row.distance_from_site !== null && row.distance_from_site !== undefined
+            ? Number(row.distance_from_site)
+            : null,
+        latitude:
+          row.latitude !== null && row.latitude !== undefined ? Number(row.latitude) : null,
+        longitude:
+          row.longitude !== null && row.longitude !== undefined ? Number(row.longitude) : null,
+      }));
+
+      return res.json(rows);
+    } catch (error) {
+      logError('check-ins:list:error', { projectId: req.params?.projectId }, error);
+      const message = pool ? 'Failed to fetch check-ins' : 'Database is not configured (set DATABASE_URL)';
+      return res.status(500).json({ message });
+    }
+  });
+
+  app.get('/api/check-in-status/:projectId/:userId', async (req, res) => {
+    try {
+      const { projectId, userId } = req.params;
+      if (!projectId || !isUuid(projectId) || !userId || !isUuid(userId)) {
+        return res.status(400).json({ message: 'projectId and userId are required' });
+      }
+
+      await assertDbReady();
+      const startOfDay = new Date();
+      startOfDay.setUTCHours(0, 0, 0, 0);
+
+      const result = await pool.query(
+        `
+          SELECT check_in_time, distance_from_site
+          FROM check_ins
+          WHERE project_id = $1
+            AND user_id = $2
+            AND check_in_time >= $3
+          ORDER BY check_in_time DESC
+          LIMIT 1
+        `,
+        [projectId, userId, startOfDay.toISOString()]
+      );
+
+      const row = result.rows[0];
+      return res.json({
+        checkedIn: !!row,
+        lastCheckIn: row?.check_in_time || null,
+        distance:
+          row?.distance_from_site !== undefined && row?.distance_from_site !== null
+            ? Number(row.distance_from_site)
+            : null,
+      });
+    } catch (error) {
+      logError(
+        'check-in-status:error',
+        { projectId: req.params?.projectId, userId: req.params?.userId },
+        error
+      );
+      const message = pool ? 'Failed to check status' : 'Database is not configured (set DATABASE_URL)';
+      return res.status(500).json({ message });
+    }
+  });
+
+  app.get('/api/projects/:projectId/messages', async (req, res) => {
     try {
       const { projectId } = req.params;
       const { userId } = req.query || {};

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -14,6 +15,7 @@ import {
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { saveProject, removeProject } from '../../services/projects';
 import palette from '../../styles/palette';
 
@@ -32,6 +34,19 @@ const CreateProjectScreen = ({ navigation, route }) => {
     timeline: existingProject?.timeline || '',
     address: existingProject?.address || '',
   });
+  const [jobSiteLatitude, setJobSiteLatitude] = useState(
+    existingProject?.job_site_latitude ?? existingProject?.jobSiteLatitude ?? null
+  );
+  const [jobSiteLongitude, setJobSiteLongitude] = useState(
+    existingProject?.job_site_longitude ?? existingProject?.jobSiteLongitude ?? null
+  );
+  const [locationVerified, setLocationVerified] = useState(
+    Boolean(
+      (existingProject?.job_site_latitude ?? existingProject?.jobSiteLatitude) &&
+        (existingProject?.job_site_longitude ?? existingProject?.jobSiteLongitude)
+    )
+  );
+  const [verifyingLocation, setVerifyingLocation] = useState(false);
   const [milestones, setMilestones] = useState([
     ...(existingProject?.milestones?.length
       ? existingProject.milestones.map((m, idx) => ({
@@ -63,6 +78,11 @@ const CreateProjectScreen = ({ navigation, route }) => {
 
   const updateField = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    if (field === 'address') {
+      setLocationVerified(false);
+      setJobSiteLatitude(null);
+      setJobSiteLongitude(null);
+    }
   };
 
   const addMilestone = () => {
@@ -107,6 +127,17 @@ const CreateProjectScreen = ({ navigation, route }) => {
     } else if (step === 2) {
       if (!formData.timeline || !formData.address) {
         Alert.alert('Required', 'Please fill in all required fields');
+        return;
+      }
+      if (!locationVerified) {
+        Alert.alert(
+          'Location not verified',
+          'Recommended: Verify location for GPS check-ins.',
+          [
+            { text: 'Verify now', style: 'cancel' },
+            { text: 'Continue', onPress: () => setStep(3) },
+          ]
+        );
         return;
       }
       setStep(3);
@@ -184,6 +215,9 @@ const CreateProjectScreen = ({ navigation, route }) => {
       estimatedBudget: budgetValue,
       timeline: formData.timeline,
       address: formData.address,
+      job_site_latitude: jobSiteLatitude,
+      job_site_longitude: jobSiteLongitude,
+      check_in_radius: 200,
       milestones: milestones.map((milestone, index) => ({
         name: milestone.name,
         amount: parseFloat(milestone.amount) || null,
@@ -216,6 +250,58 @@ const CreateProjectScreen = ({ navigation, route }) => {
       Alert.alert('Error', 'Failed to save project');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const verifyLocation = async () => {
+    const address = formData.address.trim();
+    if (!address) {
+      Alert.alert('Address required', 'Enter an address to verify.');
+      return;
+    }
+    setVerifyingLocation(true);
+    try {
+      const results = await Location.geocodeAsync(address);
+      const first = results?.[0];
+      if (!first?.latitude || !first?.longitude) {
+        throw new Error('Could not find coordinates for this address.');
+      }
+      setJobSiteLatitude(first.latitude);
+      setJobSiteLongitude(first.longitude);
+      setLocationVerified(true);
+    } catch (error) {
+      console.error('verifyLocation:error', error);
+      setLocationVerified(false);
+      Alert.alert('Location not found', error?.message || 'Could not verify this address.');
+    } finally {
+      setVerifyingLocation(false);
+    }
+  };
+
+  const useCurrentLocation = async () => {
+    setVerifyingLocation(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Allow location access to use your current location.');
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const coords = position?.coords;
+      if (!coords?.latitude || !coords?.longitude) {
+        throw new Error('Could not read current location.');
+      }
+      setJobSiteLatitude(coords.latitude);
+      setJobSiteLongitude(coords.longitude);
+      setLocationVerified(true);
+    } catch (error) {
+      console.error('useCurrentLocation:error', error);
+      setLocationVerified(false);
+      Alert.alert('Error', error?.message || 'Could not fetch current location.');
+    } finally {
+      setVerifyingLocation(false);
     }
   };
 
@@ -287,12 +373,43 @@ const CreateProjectScreen = ({ navigation, route }) => {
       />
 
       <Text style={styles.label}>Project Address *</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter project location"
-        value={formData.address}
-        onChangeText={(value) => updateField('address', value)}
-      />
+      <View style={styles.addressRow}>
+        <TextInput
+          style={[styles.input, styles.addressInput]}
+          placeholder="Enter project location"
+          value={formData.address}
+          onChangeText={(value) => updateField('address', value)}
+        />
+        <TouchableOpacity
+          style={[
+            styles.verifyButton,
+            (!formData.address || verifyingLocation) && styles.verifyButtonDisabled,
+          ]}
+          onPress={verifyLocation}
+          disabled={!formData.address || verifyingLocation}
+        >
+          {verifyingLocation ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.verifyButtonText}>Verify</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+      <View style={styles.locationStatusRow}>
+        {verifyingLocation ? (
+          <>
+            <ActivityIndicator size="small" color={palette.primary} />
+            <Text style={styles.statusText}>Verifying location...</Text>
+          </>
+        ) : locationVerified ? (
+          <Text style={styles.verifiedText}>✓ Location verified</Text>
+        ) : (
+          <Text style={styles.warningText}>Recommended: Verify location for GPS check-ins</Text>
+        )}
+      </View>
+      <TouchableOpacity style={styles.useCurrentButton} onPress={useCurrentLocation}>
+        <Text style={styles.useCurrentText}>Use Current Location</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -602,6 +719,62 @@ const styles = StyleSheet.create({
   textArea: {
     height: 100,
     textAlignVertical: 'top',
+  },
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  addressInput: {
+    flex: 1,
+  },
+  verifyButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: palette.primary,
+    borderRadius: 12,
+    minWidth: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#111827',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  verifyButtonDisabled: {
+    backgroundColor: palette.border,
+  },
+  verifyButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  locationStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  statusText: {
+    color: palette.muted,
+  },
+  verifiedText: {
+    color: palette.success,
+    fontWeight: '700',
+  },
+  useCurrentButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
+  },
+  useCurrentText: {
+    color: palette.text,
+    fontWeight: '700',
   },
   typeGrid: {
     flexDirection: 'row',

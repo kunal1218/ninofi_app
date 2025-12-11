@@ -12,6 +12,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useEffect, useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import palette from '../../styles/palette';
+import CheckInButton from '../../components/CheckInButton';
 import { loadNotifications } from '../../services/notifications';
 import { createConnectAccountLink } from '../../services/payments';
 
@@ -197,10 +198,29 @@ const WorkerDashboard = ({ navigation }) => {
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateIcon}>📦</Text>
             <Text style={styles.emptyStateText}>No active gigs</Text>
-            <Text style={styles.emptyStateSubtext}>
-              Apply for gigs to get started
-            </Text>
+            <Text style={styles.emptyStateSubtext}>Apply for gigs to get started</Text>
           </View>
+          {/* Example gig card with check-in button. Replace with real gig list when available. */}
+          {/* {activeGigs?.map((gig) => (
+            <View key={gig.id} style={styles.gigCard}>
+              <View style={styles.gigHeader}>
+                <Text style={styles.gigTitle}>{gig.title}</Text>
+                <Text style={styles.gigPay}>${gig.pay}</Text>
+              </View>
+              <Text style={styles.gigContractor}>{gig.contractorName || 'Contractor'}</Text>
+              <View style={styles.gigDetails}>
+                <View style={styles.gigDetail}>
+                  <Text style={styles.gigDetailIcon}>📍</Text>
+                  <Text style={styles.gigDetailText}>{gig.address || 'No address provided'}</Text>
+                </View>
+              </View>
+              <CheckInButton
+                projectId={gig.projectId}
+                userId={user?.id}
+                userType="worker"
+              />
+            </View>
+          ))} */}
         </View>
       </ScrollView>
     </SafeAreaView>

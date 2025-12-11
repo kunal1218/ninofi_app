@@ -10,8 +10,11 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const auth = useSelector((state: any) => state.auth || {});
-  const isAuthenticated = auth.isAuthenticated;
-  const isAdmin = !!auth.isAdmin;
+  const isAuthenticated = auth.isAuthenticated === true;
+  const isAdmin =
+    isAuthenticated &&
+    auth.isAdmin === true &&
+    (auth.user?.userRole || auth.user?.role || '').toUpperCase() === 'ADMIN';
 
   return (
     <Tabs

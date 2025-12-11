@@ -28,8 +28,10 @@ const HomeownerDashboard = ({ navigation }) => {
   const [stripeStatus, setStripeStatus] = useState(null);
   const isStripeConnected =
     !!((stripeStatus?.accountId || user?.stripe_account_id) &&
-    ((stripeStatus?.payoutsEnabled ?? user?.stripePayoutsEnabled) ||
-      (stripeStatus?.chargesEnabled ?? user?.stripeChargesEnabled)));
+    (stripeStatus?.payoutsEnabled ||
+      stripeStatus?.chargesEnabled ||
+      user?.stripePayoutsEnabled ||
+      user?.stripeChargesEnabled));
   const [hasSeenConnected, setHasSeenConnected] = useState(false);
   const [hasSeenLoaded, setHasSeenLoaded] = useState(false);
   const lastConnectedRef = useRef(false);
@@ -104,6 +106,9 @@ const HomeownerDashboard = ({ navigation }) => {
     if (!res.success) {
       Alert.alert('Error', res.error || 'Failed to start Stripe onboarding');
       return;
+    }
+    if (res.data) {
+      setStripeStatus(res.data);
     }
     const url = res.data?.url;
     if (url) {
@@ -212,21 +217,23 @@ const HomeownerDashboard = ({ navigation }) => {
                 Contracts
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleConnectBank}
-              disabled={isConnectingStripe || isStripeConnected}
-            >
-              <Text style={styles.actionIcon}>🏦</Text>
-              <Text
-                style={styles.actionText}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.85}
+            {!isStripeConnected && (
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleConnectBank}
+                disabled={isConnectingStripe}
               >
-                {isStripeConnected ? 'Bank Connected' : isConnectingStripe ? 'Opening...' : 'Connect Bank'}
-              </Text>
-            </TouchableOpacity>
+                <Text style={styles.actionIcon}>🏦</Text>
+                <Text
+                  style={styles.actionText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
+                >
+                  {isConnectingStripe ? 'Opening...' : 'Connect Bank'}
+                </Text>
+              </TouchableOpacity>
+            )}
             {isStripeConnected && (
               <TouchableOpacity
                 style={styles.actionButton}

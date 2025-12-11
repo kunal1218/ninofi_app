@@ -52,7 +52,7 @@ export default function TabLayout() {
             options={{
               title: 'Invoices',
               tabBarIcon: ({ color, size }) => (
-                <Ionicons name="document-text-sharp" color={color} size={size ?? 24} />
+                <Ionicons name="receipt-outline" color={color} size={size ?? 24} />
               ),
             }}
           />
@@ -61,7 +61,7 @@ export default function TabLayout() {
             options={{
               title: 'Settings',
               tabBarIcon: ({ color, size }) => (
-                <Ionicons name="settings-sharp" color={color} size={size ?? 24} />
+                <Ionicons name="cog-outline" color={color} size={size ?? 24} />
               ),
             }}
           />

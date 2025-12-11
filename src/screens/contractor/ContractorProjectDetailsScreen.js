@@ -140,7 +140,7 @@ const ContractorProjectDetailsScreen = ({ route, navigation }) => {
             {project.media?.length ? (
               project.media.map((m, idx) => (
                 <Image
-                  key={m.id || idx}
+                  key={`${m.id || m.url || 'media'}-${idx}`}
                   source={{ uri: m.url }}
                   style={styles.media}
                 />

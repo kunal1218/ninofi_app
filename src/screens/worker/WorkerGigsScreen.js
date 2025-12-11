@@ -136,10 +136,6 @@ const WorkerGigsScreen = ({ navigation }) => {
     }
   });
 
-  const handleCheckIn = (proj) => {
-    Alert.alert('Checked in', `Checked in at ${proj.title || 'project'}.`);
-  };
-
   const handleOpen = async (projId) => {
     try {
       await projectAPI.getProjectDetails(projId);
@@ -178,12 +174,9 @@ const WorkerGigsScreen = ({ navigation }) => {
                   .reduce((sum, a) => sum + Number(a.pay || 0), 0)
                   .toLocaleString()}
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.checkInButton} onPress={() => handleCheckIn(proj)}>
-              <Text style={styles.checkInText}>Check in at job site</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
+          </TouchableOpacity>
+        </View>
+      ))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -204,16 +197,6 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontWeight: '700', color: palette.text },
   cardMeta: { color: palette.muted, fontSize: 12 },
-  checkInButton: {
-    marginTop: 8,
-    backgroundColor: '#E8EAFF',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-  checkInText: { color: palette.primary, fontWeight: '700' },
 });
 
 export default WorkerGigsScreen;

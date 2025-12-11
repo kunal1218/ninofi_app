@@ -31,6 +31,7 @@ const ENV_VARIABLES = [
   { key: 'NODE_ENV', label: 'Node environment' },
   { key: 'JWT_SECRET', label: 'JWT signing secret' },
   { key: 'JWT_EXPIRES_IN', label: 'JWT expiration (e.g., 7d, 1h)' },
+  { key: 'EXPO_PUBLIC_ADMIN_EMAILS', label: 'Admin allowlist emails (comma-separated)' },
   { key: 'DATABASE_URL', label: 'PostgreSQL connection URL (Railway)' },
   { key: 'DATABASE_SSL', label: 'Force Postgres SSL (true/false)' },
   { key: 'PGSSLMODE', label: 'Postgres SSL mode (require/disable)' },
@@ -2075,6 +2076,33 @@ const signJwt = (userId) => {
   return jwt.sign({ sub: userId }, secret, { expiresIn });
 };
 
+const getAdminAllowlist = () =>
+  (process.env.ADMIN_EMAILS || process.env.EXPO_PUBLIC_ADMIN_EMAILS || '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+
+const ensureAdminRoleForAllowlistedUser = async (user) => {
+  if (!user?.id) return user;
+  const emailNormalized = (user.email_normalized || user.email || '').toLowerCase();
+  if (!emailNormalized) return user;
+
+  const allowlist = getAdminAllowlist();
+  if (!allowlist.includes(emailNormalized)) {
+    return user;
+  }
+
+  if ((user.user_role || '').toUpperCase() === 'ADMIN') {
+    return user;
+  }
+
+  const result = await pool.query(
+    'UPDATE users SET user_role = $1 WHERE id = $2 RETURNING *',
+    ['ADMIN', user.id]
+  );
+  return result.rows[0] || { ...user, user_role: 'ADMIN' };
+};
+
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -2106,10 +2134,7 @@ const requireAdmin = async (req, res, next) => {
     const userRes = await pool.query('SELECT user_role, email_normalized FROM users WHERE id = $1 LIMIT 1', [req.userId]);
     const role = (userRes.rows[0]?.user_role || '').toUpperCase();
     const emailNormalized = (userRes.rows[0]?.email_normalized || '').toLowerCase();
-    const allowlist = (process.env.ADMIN_EMAILS || process.env.EXPO_PUBLIC_ADMIN_EMAILS || '')
-      .split(',')
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean);
+    const allowlist = getAdminAllowlist();
     const isAllowlisted = emailNormalized && allowlist.includes(emailNormalized);
     if (role !== 'ADMIN' && !isAllowlisted) {
       return res.status(403).json({ message: 'Admin access required' });
@@ -3682,9 +3707,11 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
+    const userWithAdminRole = await ensureAdminRoleForAllowlistedUser(user);
+
     return res.json({
-      user: mapDbUser(user),
-      token: signJwt(user.id),
+      user: mapDbUser(userWithAdminRole),
+      token: signJwt(userWithAdminRole.id),
     });
   } catch (error) {
     console.error('Error logging in:', error);

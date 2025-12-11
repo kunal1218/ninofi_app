@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -9,13 +11,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
-import { useFocusEffect } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import palette from '../../styles/palette';
-import { loadProjectsForUser } from '../../services/projects';
+import { useDispatch, useSelector } from 'react-redux';
 import { loadNotifications } from '../../services/notifications';
 import { createConnectAccountLink } from '../../services/payments';
+import { loadProjectsForUser } from '../../services/projects';
+import palette from '../../styles/palette';
 
 const HomeownerDashboard = ({ navigation }) => {
   const dispatch = useDispatch();

@@ -68,7 +68,7 @@ const ContractorProjectDetailsScreen = ({ route, navigation }) => {
           style: 'destructive',
           onPress: async () => {
             setIsLeaving(true);
-            const result = await leaveProject(project.id, user.id, dispatch);
+            const result = await leaveProject(project.id, { contractorId: user.id }, dispatch);
             setIsLeaving(false);
             if (result.success) {
               Alert.alert('Left project', 'The homeowner has been notified.', [
@@ -150,7 +150,7 @@ const ContractorProjectDetailsScreen = ({ route, navigation }) => {
         </View>
       </ScrollView>
 
-      {(canApply || canLeave) && (
+      {(canApply || canLeave || (project?.assignedContractor?.id === user?.id)) && (
         <View style={styles.footer}>
           {canChat && (
             <TouchableOpacity
@@ -171,7 +171,7 @@ const ContractorProjectDetailsScreen = ({ route, navigation }) => {
               </Text>
             </TouchableOpacity>
           )}
-          {canLeave && (
+          {(canLeave || project?.assignedContractor?.id === user?.id) && (
             <TouchableOpacity
               style={[styles.leaveButton, isLeaving ? styles.leaveDisabled : null]}
               onPress={handleLeave}
@@ -258,8 +258,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
+    maxWidth: '60%',
   },
-  milestonePillText: { color: palette.primary, fontWeight: '700', fontSize: 12.5 },
+  milestonePillText: {
+    color: palette.primary,
+    fontWeight: '700',
+    fontSize: 12.5,
+    textAlign: 'center',
+    flexShrink: 1,
+  },
   mediaRow: { marginTop: 10, gap: 10 },
   media: {
     width: 140,

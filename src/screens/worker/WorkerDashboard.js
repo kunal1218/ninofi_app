@@ -17,11 +17,18 @@ import palette from '../../styles/palette';
 import { loadNotifications } from '../../services/notifications';
 import { createConnectAccountLink, fetchStripeStatus } from '../../services/payments';
 import { addNotification } from '../../store/notificationSlice';
+import { projectAPI } from '../../services/api';
+import {
+  addWorkerAssignment,
+  addWorkerProject,
+  removeWorkerAssignmentsByProject,
+} from '../../store/projectSlice';
 
 const WorkerDashboard = ({ navigation }) => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const { items: notifications } = useSelector((state) => state.notifications);
+  const { workerAssignments, workerProjects } = useSelector((state) => state.projects);
   const unreadCount = notifications.filter((n) => !n.read).length;
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [stripeStatus, setStripeStatus] = useState(null);
@@ -129,9 +136,51 @@ const WorkerDashboard = ({ navigation }) => {
     loadStripeStatus();
   }, [user?.id, loadStripeStatus]);
 
+  const loadWorkerTasks = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const taskRes = await projectAPI.listWorkerTasks(user.id);
+      const tasks = taskRes.data?.tasks || [];
+      const existingIds = new Set((workerAssignments || []).map((a) => a.id));
+      tasks.forEach((t) => {
+        const mapped = {
+          id: t.id,
+          projectId: t.projectId,
+          projectTitle: t.projectTitle,
+          projectDescription: t.projectDescription,
+          workerId: user.id,
+          description: t.description,
+          dueDate: t.dueDate || '',
+          pay: t.pay || 0,
+          status: t.status,
+          proofImageUrl: t.proofImageUrl || null,
+        };
+        if (!existingIds.has(mapped.id)) {
+          dispatch(addWorkerAssignment(mapped));
+        }
+        if (mapped.projectId) {
+          dispatch(
+            addWorkerProject({
+              id: mapped.projectId,
+              title: mapped.projectTitle || '',
+              description: mapped.projectDescription || '',
+            })
+          );
+        }
+      });
+      const activeProjectIds = new Set(tasks.map((t) => t.projectId).filter(Boolean));
+      (workerAssignments || [])
+        .filter((a) => a.workerId === user?.id && a.projectId && !activeProjectIds.has(a.projectId))
+        .forEach((a) => dispatch(removeWorkerAssignmentsByProject(a.projectId)));
+    } catch (err) {
+      console.log('worker:tasks:error', err?.response?.data || err.message);
+    }
+  }, [user?.id, workerAssignments, dispatch]);
+
   useEffect(() => {
     fetchNotifs();
     loadStripeStatus();
+    loadWorkerTasks();
   }, [fetchNotifs, loadStripeStatus]);
 
   useEffect(() => {
@@ -147,6 +196,7 @@ const WorkerDashboard = ({ navigation }) => {
     useCallback(() => {
       fetchNotifs();
       loadStripeStatus();
+      loadWorkerTasks();
     }, [fetchNotifs, loadStripeStatus])
   );
 
@@ -172,6 +222,29 @@ const WorkerDashboard = ({ navigation }) => {
     }
     lastConnectedRef.current = isStripeConnected;
   }, [hasSeenConnected, hasSeenLoaded, isStripeConnected]);
+
+  // Derive current gigs from accepted applications and assigned tasks
+  const acceptedProjects = new Set(
+    (workerAssignments || [])
+      .filter((a) => a.workerId === user?.id && a.projectId)
+      .map((a) => a.projectId)
+  );
+  (workerProjects || [])
+    .filter((p) => p?.id)
+    .forEach((p) => acceptedProjects.add(p.id));
+
+  const currentGigs = Array.from(acceptedProjects).map((pid) => {
+    const project = (workerProjects || []).find((p) => p.id === pid);
+    const pay = (workerAssignments || [])
+      .filter((a) => a.projectId === pid)
+      .reduce((sum, a) => sum + Number(a.pay || 0), 0);
+    return {
+      id: pid,
+      title: project?.title || 'Project',
+      description: project?.description || '',
+      pay,
+    };
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -302,32 +375,29 @@ const WorkerDashboard = ({ navigation }) => {
         {/* Current Gigs */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Your Current Gigs</Text>
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>📦</Text>
-            <Text style={styles.emptyStateText}>No active gigs</Text>
-            <Text style={styles.emptyStateSubtext}>Apply for gigs to get started</Text>
-          </View>
-          {/* Example gig card with check-in button. Replace with real gig list when available. */}
-          {/* {activeGigs?.map((gig) => (
-            <View key={gig.id} style={styles.gigCard}>
-              <View style={styles.gigHeader}>
-                <Text style={styles.gigTitle}>{gig.title}</Text>
-                <Text style={styles.gigPay}>${gig.pay}</Text>
-              </View>
-              <Text style={styles.gigContractor}>{gig.contractorName || 'Contractor'}</Text>
-              <View style={styles.gigDetails}>
-                <View style={styles.gigDetail}>
-                  <Text style={styles.gigDetailIcon}>📍</Text>
-                  <Text style={styles.gigDetailText}>{gig.address || 'No address provided'}</Text>
-                </View>
-              </View>
-              <CheckInButton
-                projectId={gig.projectId}
-                userId={user?.id}
-                userType="worker"
-              />
+          {currentGigs.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateIcon}>📦</Text>
+              <Text style={styles.emptyStateText}>No active gigs</Text>
+              <Text style={styles.emptyStateSubtext}>Apply for gigs to get started</Text>
             </View>
-          ))} */}
+          ) : (
+            currentGigs.map((gig) => (
+              <View key={gig.id} style={styles.gigCard}>
+                <View style={styles.gigHeader}>
+                  <Text style={styles.gigTitle}>{gig.title}</Text>
+                  <Text style={styles.gigPay}>${gig.pay.toLocaleString()}</Text>
+                </View>
+                <Text style={styles.gigContractor}>{gig.description || 'Active project'}</Text>
+                <TouchableOpacity
+                  style={styles.applyButton}
+                  onPress={() => navigation.navigate('WorkerProject', { projectId: gig.id })}
+                >
+                  <Text style={styles.applyButtonText}>Open Project</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

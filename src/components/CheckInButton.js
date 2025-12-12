@@ -255,8 +255,6 @@ const CheckInButton = ({ projectId, userId, userType, userName, onStatusChange }
     checkInTime && !checkOutTime && styles.buttonSuccess,
   ];
 
-  const statusLabel = checkInTime && !checkOutTime ? 'Checked In' : 'Not Checked In';
-
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
@@ -264,11 +262,6 @@ const CheckInButton = ({ projectId, userId, userType, userName, onStatusChange }
           <Text style={styles.title}>GPS Check-In</Text>
           <Text style={styles.subtitle}>
             Verify you’re on-site to log today’s attendance and unlock payments.
-          </Text>
-        </View>
-        <View style={[styles.statusPill, checkInTime && !checkOutTime ? styles.statusActive : styles.statusIdle]}>
-          <Text style={[styles.statusText, checkInTime && !checkOutTime ? styles.statusTextActive : null]}>
-            {statusLabel}
           </Text>
         </View>
       </View>
@@ -328,6 +321,7 @@ const styles = StyleSheet.create({
   subtitle: {
     color: palette.muted,
     fontSize: 14,
+    marginTop: 4,
     marginBottom: 6,
   },
   button: {
@@ -384,29 +378,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     letterSpacing: 0.5,
-  },
-  statusPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: palette.surface,
-  },
-  statusActive: {
-    backgroundColor: palette.accent,
-    borderColor: palette.primary,
-  },
-  statusIdle: {
-    backgroundColor: palette.surface,
-  },
-  statusText: {
-    color: palette.muted,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  statusTextActive: {
-    color: palette.primary,
   },
 });
 

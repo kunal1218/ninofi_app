@@ -7135,7 +7135,8 @@ app.get('/api/work-hours/project/:projectId/summary', async (req, res) => {
           action: kind,
         };
         const contractorTarget = contractorId || ownerFallbackId;
-        if (contractorTarget) {
+        // Only send the contractor notification if the target is not the worker themself.
+        if (contractorTarget && contractorTarget !== userId) {
           await sendNotification(contractorTarget, 'Worker check-in', contractorBody, payload);
         }
         // Always notify the worker themself for confirmation

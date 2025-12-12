@@ -5365,6 +5365,132 @@ app.get('/api/gigs/worker/:workerId/tasks', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/projects/:projectId/tasks', requireAuth, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    if (!projectId || !isUuid(projectId)) {
+      return res.status(400).json({ message: 'Valid projectId is required' });
+    }
+    await assertDbReady();
+    const projectRow = await getProjectById(projectId);
+    if (!projectRow) return res.status(404).json({ message: 'Project not found' });
+    const participants = await getProjectParticipants(projectId);
+    const contractorIds = await getProjectContractorIds(projectId);
+    const isOwner = participants?.ownerId === req.userId;
+    const isContractor = contractorIds && contractorIds.has(req.userId);
+    if (!isOwner && !isContractor) {
+      return res.status(403).json({ message: 'Not authorized to view tasks for this project' });
+    }
+    const rows = await pool.query(
+      `
+        SELECT t.*, u.full_name AS worker_name
+        FROM tasks t
+        LEFT JOIN users u ON u.id = t.worker_id
+        WHERE t.project_id = $1
+        ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC
+        LIMIT 200
+      `,
+      [projectId]
+    );
+    const tasks = rows.rows.map((t) => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      projectId: t.project_id,
+      workerId: t.worker_id,
+      workerName: t.worker_name || '',
+      status: t.status,
+      proofImageUrl: t.proof_image_url || null,
+      pay: Number(t.escrow_amount_cents || 0) / 100,
+      dueDate: t.due_date || null,
+      createdAt: t.created_at,
+      updatedAt: t.updated_at,
+    }));
+    return res.json({ tasks });
+  } catch (error) {
+    console.error('tasks:list:project:error', error);
+    return res.status(500).json({ message: 'Failed to load tasks' });
+  }
+});
+
+app.post('/api/tasks/:taskId/decision', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { taskId } = req.params;
+    const { decision, message } = req.body || {};
+    const normalized = (decision || '').toUpperCase();
+    if (!['APPROVE', 'DENY'].includes(normalized)) {
+      return res.status(400).json({ message: 'decision must be APPROVE or DENY' });
+    }
+    await assertDbReady();
+    await client.query('BEGIN');
+    const taskRes = await client.query('SELECT * FROM tasks WHERE id = $1 FOR UPDATE', [taskId]);
+    if (!taskRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Task not found' });
+    }
+    const task = taskRes.rows[0];
+    const projectRow = task.project_id ? await getProjectById(task.project_id) : null;
+    const participants = task.project_id ? await getProjectParticipants(task.project_id) : null;
+    const contractorIds = task.project_id ? await getProjectContractorIds(task.project_id) : new Set();
+    const isOwner = participants?.ownerId === req.userId || projectRow?.user_id === req.userId;
+    const isContractor = contractorIds && contractorIds.has(req.userId);
+    if (!isOwner && !isContractor && task.creator_id !== req.userId) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: 'Not authorized to decide this task' });
+    }
+    if (![TASK_STATUSES.SUBMITTED, TASK_STATUSES.UNDER_REVIEW].includes(task.status)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Task not ready for decision' });
+    }
+    if (normalized === 'DENY') {
+      await client.query(
+        `
+          UPDATE tasks
+          SET status = $1, denied_at = NOW(), admin_message = $2, updated_at = NOW()
+          WHERE id = $3
+        `,
+        [TASK_STATUSES.ASSIGNED, message || null, taskId]
+      );
+      if (task.worker_id) {
+        await sendNotification(
+          task.worker_id,
+          'Work needs changes',
+          message || 'Submission was rejected. Please resubmit.',
+          { type: 'task-denied', taskId, projectId: task.project_id }
+        );
+      }
+      await client.query('COMMIT');
+      return res.json({ success: true, status: TASK_STATUSES.ASSIGNED });
+    }
+
+    await client.query(
+      `
+        UPDATE tasks
+        SET status = $1, verified_at = NOW(), updated_at = NOW()
+        WHERE id = $2
+      `,
+      [TASK_STATUSES.VERIFIED, taskId]
+    );
+    if (task.worker_id) {
+      await sendNotification(
+        task.worker_id,
+        'Work approved',
+        'Your submission was approved.',
+        { type: 'task-approved', taskId, projectId: task.project_id }
+      );
+    }
+    await client.query('COMMIT');
+    return res.json({ success: true, status: TASK_STATUSES.VERIFIED });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('tasks:decision:error', error);
+    return res.status(500).json({ message: 'Failed to update task status' });
+  } finally {
+    client.release();
+  }
+});
+
 app.post('/api/gigs/:projectId/submit-work', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {

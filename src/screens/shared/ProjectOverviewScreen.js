@@ -1,6 +1,6 @@
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Image } from 'react-native';
 import { useSelector } from 'react-redux';
 import {
   fetchGeneratedContract,
@@ -36,6 +36,8 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
   const [checkIns, setCheckIns] = useState([]);
   const [checkInsLoading, setCheckInsLoading] = useState(false);
   const [checkInsModal, setCheckInsModal] = useState({ open: false, workerName: '', entries: [] });
+  const [tasks, setTasks] = useState([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
 
   if (!project) {
     return (
@@ -109,7 +111,8 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
     useCallback(() => {
       loadContracts();
       loadCheckIns();
-    }, [loadContracts])
+      loadTasks();
+    }, [loadContracts, loadTasks])
   );
 
   const handleProposeContract = async () => {
@@ -274,6 +277,51 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
     }));
   }, [checkIns]);
 
+  const loadTasks = useCallback(async () => {
+    if (!project?.id || role !== 'contractor') return;
+    setTasksLoading(true);
+    try {
+      const res = await projectAPI.listProjectTasks(project.id);
+      setTasks(res.data?.tasks || []);
+    } catch (err) {
+      // ignore
+    } finally {
+      setTasksLoading(false);
+    }
+  }, [project?.id, role]);
+
+  const submissions = useMemo(
+    () =>
+      tasks.filter((t) =>
+        ['SUBMITTED', 'UNDER_REVIEW'].includes((t.status || '').toUpperCase())
+      ),
+    [tasks]
+  );
+
+  const decideTask = useCallback(
+    async (taskId, decision) => {
+      if (!taskId || !decision) return;
+      const confirm = decision.toLowerCase() === 'approve'
+        ? 'Approve this submission?'
+        : 'Send back for changes?';
+      Alert.alert('Confirm', confirm, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes',
+          onPress: async () => {
+            try {
+              await projectAPI.decideTask(taskId, decision);
+              loadTasks();
+            } catch (err) {
+              Alert.alert('Error', err?.response?.data?.message || 'Failed to update task');
+            }
+          },
+        },
+      ]);
+    },
+    [loadTasks]
+  );
+
   const startEditContract = async (contract) => {
     let contractToEdit = contract;
     if (!contract.contractText) {
@@ -393,6 +441,54 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
                       </Text>
                     </TouchableOpacity>
                   )}
+                </View>
+              ))}
+          </View>
+        )}
+
+        {isContractor && (
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Work Submissions</Text>
+              <Text style={styles.cardMeta}>
+                {tasksLoading ? 'Loading…' : `${submissions.length} pending`}
+              </Text>
+            </View>
+            {tasksLoading && <Text style={styles.muted}>Loading submissions…</Text>}
+            {!tasksLoading && submissions.length === 0 && (
+              <Text style={styles.muted}>No pending submissions.</Text>
+            )}
+            {!tasksLoading &&
+              submissions.map((t) => (
+                <View key={t.id} style={styles.contractCard}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.contractTitle}>{t.title || 'Assigned Work'}</Text>
+                    <Text style={styles.contractMeta}>{t.workerName || 'Worker'}</Text>
+                  </View>
+                  {t.description ? <Text style={styles.body}>{t.description}</Text> : null}
+                  {t.proofImageUrl ? (
+                    <Image
+                      source={{ uri: t.proofImageUrl }}
+                      style={styles.proofImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text style={styles.mutedSmall}>No proof image attached.</Text>
+                  )}
+                  <View style={styles.submissionActions}>
+                    <TouchableOpacity
+                      style={[styles.secondaryButton, styles.approveButton]}
+                      onPress={() => decideTask(t.id, 'approve')}
+                    >
+                      <Text style={styles.secondaryText}>Approve</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.secondaryButton, styles.denyButton]}
+                      onPress={() => decideTask(t.id, 'deny')}
+                    >
+                      <Text style={[styles.secondaryText, styles.denyText]}>Request Changes</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))}
           </View>
@@ -1058,6 +1154,26 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontSize: 12,
   },
+  proofImage: {
+    width: '100%',
+    height: 160,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  submissionActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  approveButton: {
+    flex: 1,
+    borderColor: palette.success,
+  },
+  denyButton: {
+    flex: 1,
+    borderColor: palette.error,
+  },
+  denyText: { color: palette.error, fontWeight: '700' },
 });
 
 export default ProjectOverviewScreen;

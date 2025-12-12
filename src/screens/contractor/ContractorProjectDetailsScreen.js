@@ -115,9 +115,9 @@ const ContractorProjectDetailsScreen = ({ route, navigation }) => {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Media</Text>
           {project.media && project.media.length ? (
-            project.media.map((m) => (
+            project.media.map((m, idx) => (
               <Image
-                key={m.id || m.url}
+                key={`${m.id || m.url || 'media'}-${idx}`}
                 source={{ uri: m.url }}
                 style={styles.mediaImage}
                 resizeMode="cover"

@@ -2267,6 +2267,19 @@ const persistMedia = async (projectId, mediaItems = []) => {
       const mimeType = mimeMatch?.[1] || 'image/jpeg';
       const extension = mimeType.split('/')[1] || 'jpg';
       const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${extension}`;
+
+      // If using stub storage, persist to local uploads for accessibility.
+      if (storageService?.provider === 'stub-storage') {
+        const projectDir = path.join(UPLOAD_DIR, projectId);
+        await fs.promises.mkdir(projectDir, { recursive: true });
+        const filePath = path.join(projectDir, filename);
+        await fs.promises.writeFile(filePath, base64Data || '', 'base64');
+        const relativePath = path.relative(__dirname, filePath);
+        saved.push({ url: `/${relativePath}`, label: item.label || '' });
+        continue;
+      }
+
+      // Otherwise, use configured storage provider (e.g., S3/GCS) and return signed URL.
       const storageKey = `projects/${projectId}/${filename}`;
       const uploadResult = await storageService.uploadFile(storageKey, base64Data || '', mimeType);
       const signed = await storageService.getSignedUrl(uploadResult.key || storageKey);

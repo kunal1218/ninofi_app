@@ -25,8 +25,7 @@ const ContractorProjectDetailsScreen = ({ route, navigation }) => {
     project?.owner?.id &&
     user?.id &&
     project.assignedContractor.id === user.id;
-  const canLeaveProject =
-    canLeave || project?.assignedContractor?.id === user?.id || (user?.role || '').toLowerCase() === 'contractor';
+  const canLeaveProject = !!canLeave;
 
   if (!project) {
     return (

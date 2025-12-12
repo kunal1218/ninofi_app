@@ -117,9 +117,9 @@ export const downloadGeneratedContractPdf = async (projectId, contractId) => {
   }
   try {
     const res = await projectAPI.getGeneratedContractPdf(projectId, contractId);
-    const { base64, filename } = res.data || {};
+    const { base64, filename, message } = res.data || {};
     if (!base64) {
-      return { success: false, error: 'No PDF returned' };
+      return { success: false, error: message || 'No PDF returned' };
     }
     const uri = `${FileSystem.documentDirectory || ''}${filename || 'contract.pdf'}`;
     await FileSystem.writeAsStringAsync(uri, base64, {

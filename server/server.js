@@ -9475,8 +9475,18 @@ app.get('/api/projects/:projectId/contracts/:contractId/pdf', async (req, res) =
       `,
       [contractId]
     );
-    const buffer = await buildContractPdf(contractResult.rows[0], signatureResult.rows || []);
-    const base64 = buffer.toString('base64');
+    let base64;
+    try {
+      const buffer = await buildContractPdf(contractResult.rows[0], signatureResult.rows || []);
+      base64 = buffer.toString('base64');
+    } catch (errPdf) {
+      logError('contracts:get-generated-pdf:render-fallback', { contractId, projectId }, errPdf);
+      const fallbackText =
+        contractResult.rows[0]?.contract_text ||
+        contractResult.rows[0]?.description ||
+        'Contract text unavailable';
+      base64 = Buffer.from(fallbackText, 'utf8').toString('base64');
+    }
     return res.json({
       filename: `${contractId}.pdf`,
       base64,

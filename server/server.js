@@ -7107,7 +7107,11 @@ app.get('/api/work-hours/project/:projectId/summary', async (req, res) => {
       }
       const projectRow = projectResult.rows[0];
       const participants = await getProjectParticipants(projectId);
-      const contractorId = participants?.contractorId || null;
+      const contractorSet = await getProjectContractorIds(projectId);
+      const contractorId =
+        (contractorSet && contractorSet.size && Array.from(contractorSet)[0]) ||
+        participants?.contractorId ||
+        null;
       const ownerFallbackId = participants?.ownerId || null;
 
       const notifyCheckEvent = async (kind, durationSeconds = null, checkInRow = {}) => {

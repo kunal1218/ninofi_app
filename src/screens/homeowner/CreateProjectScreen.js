@@ -508,39 +508,55 @@ const CreateProjectScreen = ({ navigation, route }) => {
           </Text>
         </View>
 
-        <View style={styles.photoGrid}>
-          {attachments.map((attachment, index) => (
-            <View key={`att-${index}`} style={styles.photoTile}>
-              <Image
-                source={{ uri: attachment.dataUri || attachment.uri }}
-                style={styles.photo}
-              />
-              <TouchableOpacity style={styles.removePhoto} onPress={() => removeAttachment(index)}>
-                <Text style={styles.removePhotoText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-
-          {attachments.length < 6 && (
-            <>
-              <TouchableOpacity
-                style={styles.addPhotoButton}
-                onPress={() => pickAttachment(attachments.length, 'camera')}
-              >
-                <Text style={styles.addPhotoIcon}>📷</Text>
-                <Text style={styles.addPhotoText}>Take Photo</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.addPhotoButton}
-                onPress={() => pickAttachment(attachments.length, 'library')}
-              >
-                <Text style={styles.addPhotoIcon}>🖼️</Text>
-                <Text style={styles.addPhotoText}>Gallery</Text>
-              </TouchableOpacity>
-            </>
+        <View style={styles.attachmentContainer}>
+          {attachments.length === 0 ? (
+            <Text style={styles.attachmentEmpty}>No photos added yet.</Text>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              decelerationRate={attachments.length > 2 ? 'fast' : 'normal'}
+              snapToInterval={attachments.length > 2 ? 252 : undefined}
+              disableIntervalMomentum
+              contentContainerStyle={styles.attachmentRow}
+            >
+              {attachments.map((attachment, index) => (
+                <View key={`att-${index}`} style={styles.attachmentTile}>
+                  <Image
+                    source={{ uri: attachment.dataUri || attachment.uri }}
+                    style={styles.attachmentImage}
+                  />
+                  <TouchableOpacity
+                    style={styles.removePhoto}
+                    onPress={() => removeAttachment(index)}
+                  >
+                    <Text style={styles.removePhotoText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
           )}
         </View>
+
+        {attachments.length < 6 && (
+          <View style={styles.addPhotoRow}>
+            <TouchableOpacity
+              style={styles.addPhotoButton}
+              onPress={() => pickAttachment(attachments.length, 'camera')}
+            >
+              <Text style={styles.addPhotoIcon}>📷</Text>
+              <Text style={styles.addPhotoText}>Take Photo</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.addPhotoButton}
+              onPress={() => pickAttachment(attachments.length, 'library')}
+            >
+              <Text style={styles.addPhotoIcon}>🖼️</Text>
+              <Text style={styles.addPhotoText}>Gallery</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
   };
@@ -1017,24 +1033,37 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 8,
   },
-  photoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+  attachmentContainer: {
     marginTop: 10,
+    minHeight: 180,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
+    justifyContent: 'center',
+    paddingVertical: 10,
   },
-  photoTile: {
-    width: '47%',
-    aspectRatio: 1,
+  attachmentRow: {
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 10,
+  },
+  attachmentTile: {
+    width: 240,
+    height: 160,
     borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: '#F3F4F6',
     borderWidth: 1,
     borderColor: palette.border,
   },
-  photo: {
+  attachmentImage: {
     width: '100%',
     height: '100%',
+  },
+  attachmentEmpty: {
+    textAlign: 'center',
+    color: palette.muted,
   },
   removePhoto: {
     position: 'absolute',
@@ -1049,9 +1078,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
   },
+  addPhotoRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
   addPhotoButton: {
-    width: '47%',
-    aspectRatio: 1,
+    flex: 1,
+    height: 120,
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: palette.border,

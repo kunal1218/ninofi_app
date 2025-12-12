@@ -906,7 +906,9 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
                   })()}
                 </View>
                 <TouchableOpacity
-                  style={[styles.secondaryButton, downloadingPdf && styles.disabled]}
+                  style={styles.downloadLink}
+                  disabled={downloadingPdf}
+                  hitSlop={8}
                   onPress={async () => {
                     if (!project?.id || !viewing?.id) return;
                     setDownloadingPdf(true);
@@ -920,7 +922,7 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
                   }}
                 >
                   <Text
-                    style={styles.secondaryText}
+                    style={[styles.actionLink, downloadingPdf && styles.disabled]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                     minimumFontScale={0.85}
@@ -1159,6 +1161,7 @@ const styles = StyleSheet.create({
   signatureBlock: { marginTop: 14, gap: 6 },
   signatureText: { color: palette.text, fontSize: 13 },
   signatureButtons: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  downloadLink: { alignSelf: 'flex-start', marginTop: 12 },
   back: { fontSize: 20, color: palette.text },
   deleteLink: { color: '#dc2626', fontWeight: '700' },
   checkInGroup: {

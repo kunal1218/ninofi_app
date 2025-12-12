@@ -9477,7 +9477,6 @@ app.get('/api/projects/:projectId/contracts/:contractId/pdf', async (req, res) =
     );
     const buffer = await buildContractPdf(contractResult.rows[0], signatureResult.rows || []);
     const base64 = buffer.toString('base64');
-    res.setHeader('Content-Type', 'application/pdf');
     return res.json({
       filename: `${contractId}.pdf`,
       base64,

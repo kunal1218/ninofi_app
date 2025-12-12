@@ -111,6 +111,27 @@ export const signGeneratedContract = async ({ projectId, contractId, userId, sig
   }
 };
 
+export const downloadGeneratedContractPdf = async (projectId, contractId) => {
+  if (!projectId || !contractId) {
+    return { success: false, error: 'projectId and contractId are required' };
+  }
+  try {
+    const res = await projectAPI.getGeneratedContractPdf(projectId, contractId);
+    const { base64, filename } = res.data || {};
+    if (!base64) {
+      return { success: false, error: 'No PDF returned' };
+    }
+    const uri = `${FileSystem.documentDirectory || ''}${filename || 'contract.pdf'}`;
+    await FileSystem.writeAsStringAsync(uri, base64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    return { success: true, uri };
+  } catch (error) {
+    const msg = error.response?.data?.message || 'Failed to download contract';
+    return { success: false, error: msg };
+  }
+};
+
 export const fetchContractsForProject = async (projectId) => {
   if (!projectId) return { success: false, error: 'projectId is required' };
   try {

@@ -9421,6 +9421,76 @@ app.get('/api/projects/:projectId/contracts/:contractId', async (req, res) => {
   }
 });
 
+const buildContractPdf = async (contractRow, signatures = []) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ bufferPages: true, margin: 50 });
+      const chunks = [];
+      doc.on('data', (c) => chunks.push(c));
+      doc.on('end', () => {
+        const buffer = Buffer.concat(chunks);
+        resolve(buffer);
+      });
+      doc.fontSize(18).text(contractRow.description || 'Contract', { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(12).text(contractRow.contract_text || 'No contract text provided');
+      doc.moveDown().fontSize(14).text('Signatures', { underline: true });
+      signatures.forEach((sig, idx) => {
+        doc
+          .fontSize(12)
+          .text(
+            `${idx + 1}. ${sig.signer_role || sig.signer_role_db || 'Signer'} - ${
+              sig.signer_name || ''
+            } at ${sig.signed_at instanceof Date ? sig.signed_at.toISOString() : sig.signed_at || ''}`
+          );
+      });
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+};
+
+app.get('/api/projects/:projectId/contracts/:contractId/pdf', async (req, res) => {
+  try {
+    const { projectId, contractId } = req.params;
+    if (!projectId || !contractId) {
+      return res.status(400).json({ message: 'projectId and contractId are required' });
+    }
+    await assertDbReady();
+    const contractResult = await pool.query(
+      'SELECT * FROM generated_contracts WHERE id = $1 AND project_id = $2 LIMIT 1',
+      [contractId, projectId]
+    );
+    if (!contractResult.rows.length) {
+      return res.status(404).json({ message: 'Contract not found' });
+    }
+    const signatureResult = await pool.query(
+      `
+        SELECT gcs.*, u.full_name AS signer_name, u.role AS signer_role
+        FROM generated_contract_signatures gcs
+        LEFT JOIN users u ON u.id = gcs.user_id
+        WHERE gcs.contract_id = $1
+        ORDER BY gcs.signed_at ASC
+      `,
+      [contractId]
+    );
+    const buffer = await buildContractPdf(contractResult.rows[0], signatureResult.rows || []);
+    const base64 = buffer.toString('base64');
+    res.setHeader('Content-Type', 'application/pdf');
+    return res.json({
+      filename: `${contractId}.pdf`,
+      base64,
+    });
+  } catch (error) {
+    logError('contracts:get-generated-pdf:error', { projectId: req.params?.projectId, contractId: req.params?.contractId }, error);
+    const message = pool
+      ? 'Failed to generate contract PDF'
+      : 'Database is not configured (set DATABASE_URL)';
+    return res.status(500).json({ message });
+  }
+});
+
 // Approved generated contracts for a contractor (fully signed)
 app.get('/api/contracts/approved/:contractorId', async (req, res) => {
   try {

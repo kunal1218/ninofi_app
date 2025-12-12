@@ -9,6 +9,7 @@ import {
   deleteGeneratedContract,
   signGeneratedContract,
   updateGeneratedContract,
+  downloadGeneratedContractPdf,
 } from '../../services/contracts';
 import { projectAPI } from '../../services/api';
 import palette from '../../styles/palette';
@@ -38,6 +39,7 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
   const [checkInsModal, setCheckInsModal] = useState({ open: false, workerName: '', entries: [] });
   const [tasks, setTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   if (!project) {
     return (
@@ -871,14 +873,27 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
                     );
                   })()}
                 </View>
-                <TouchableOpacity style={styles.secondaryButton}>
+                <TouchableOpacity
+                  style={[styles.secondaryButton, downloadingPdf && styles.disabled]}
+                  onPress={async () => {
+                    if (!project?.id || !viewing?.id) return;
+                    setDownloadingPdf(true);
+                    const res = await downloadGeneratedContractPdf(project.id, viewing.id);
+                    setDownloadingPdf(false);
+                    if (res.success) {
+                      Alert.alert('Downloaded', `Saved to: ${res.uri}`);
+                    } else {
+                      Alert.alert('Error', res.error || 'Failed to download');
+                    }
+                  }}
+                >
                   <Text
                     style={styles.secondaryText}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                     minimumFontScale={0.85}
                   >
-                    Download as PDF (coming soon)
+                    {downloadingPdf ? 'Downloading…' : 'Download as PDF'}
                   </Text>
                 </TouchableOpacity>
               </>

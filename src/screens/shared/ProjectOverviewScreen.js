@@ -35,6 +35,7 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
   const [originalEditFields, setOriginalEditFields] = useState({ description: '', contractText: '' });
   const [checkIns, setCheckIns] = useState([]);
   const [checkInsLoading, setCheckInsLoading] = useState(false);
+  const [checkInsModal, setCheckInsModal] = useState({ open: false, workerName: '', entries: [] });
 
   if (!project) {
     return (
@@ -265,7 +266,12 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
         durationSeconds,
       });
     });
-    return Object.values(byWorker);
+    return Object.values(byWorker).map((w) => ({
+      ...w,
+      entries: w.entries.sort(
+        (a, b) => new Date(b.checkInTime).getTime() - new Date(a.checkInTime).getTime()
+      ),
+    }));
   }, [checkIns]);
 
   const startEditContract = async (contract) => {
@@ -373,9 +379,19 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
                     </View>
                   ))}
                   {worker.entries.length > 3 && (
-                    <Text style={styles.mutedSmall}>
-                      +{worker.entries.length - 3} more entries
-                    </Text>
+                    <TouchableOpacity
+                      onPress={() =>
+                        setCheckInsModal({
+                          open: true,
+                          workerName: worker.userName,
+                          entries: worker.entries,
+                        })
+                      }
+                    >
+                      <Text style={styles.mutedSmall}>
+                        +{worker.entries.length - 3} more entries (view all)
+                      </Text>
+                    </TouchableOpacity>
                   )}
                 </View>
               ))}
@@ -590,6 +606,44 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
           </View>
         )}
       </ScrollView>
+
+      <Modal visible={checkInsModal.open} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {checkInsModal.workerName || 'Worker'} – All Check-ins
+              </Text>
+              <TouchableOpacity onPress={() => setCheckInsModal({ open: false, workerName: '', entries: [] })}>
+                <Text style={styles.closeText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            {checkInsModal.entries.length === 0 ? (
+              <Text style={styles.muted}>No entries.</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 400 }}>
+                {checkInsModal.entries.map((entry) => (
+                  <View key={entry.id} style={styles.checkInRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.checkInTime}>
+                        {entry.checkInTime ? new Date(entry.checkInTime).toLocaleString() : '–'}
+                      </Text>
+                      <Text style={styles.checkInTime}>
+                        {entry.checkOutTime
+                          ? `Out: ${new Date(entry.checkOutTime).toLocaleString()}`
+                          : 'In progress'}
+                      </Text>
+                    </View>
+                    <Text style={styles.checkInDuration}>
+                      {entry.durationSeconds ? formatDuration(entry.durationSeconds) : '—'}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={proposeOpen} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -933,6 +987,12 @@ const styles = StyleSheet.create({
     borderColor: palette.border,
   },
   modalTitle: { fontSize: 18, fontWeight: '700', color: palette.text },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  closeText: { fontSize: 18, color: palette.text, fontWeight: '800' },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 6 },
   secondaryButton: {
     padding: 14,

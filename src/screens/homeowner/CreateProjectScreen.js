@@ -19,6 +19,66 @@ import * as Location from 'expo-location';
 import { saveProject, removeProject } from '../../services/projects';
 import palette from '../../styles/palette';
 
+const normalizeMilestones = (list = []) => {
+  const seen = new Set();
+  const normalized = [];
+  list.forEach((m, idx) => {
+    const keyParts = [
+      (m.name || '').trim().toLowerCase(),
+      Number(m.amount) || 0,
+      (m.description || '').trim().toLowerCase(),
+      (m.status || '').trim().toLowerCase(),
+    ];
+    const key = keyParts.join('|');
+    if (seen.has(key)) return;
+    seen.add(key);
+    normalized.push({
+      name: m.name || '',
+      amount: m.amount?.toString?.() || '',
+      description: m.description || '',
+      position: m.position ?? idx,
+    });
+  });
+  return normalized.length ? normalized : [{ name: '', amount: '', description: '' }];
+};
+
+const normalizeAttachments = (list = []) => {
+  const seen = new Set();
+  const normalized = [];
+  list.forEach((m, idx) => {
+    const url = m.url || m.uri || '';
+    const dataUri = m.dataUri || (url.startsWith('data:') ? url : '');
+    const key = m.id ? `id-${m.id}` : `${url}|${m.label || ''}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    if (url || dataUri) {
+      normalized.push({
+        uri: url,
+        dataUri,
+        label: m.label || '',
+      });
+    }
+  });
+  return normalized;
+};
+
+const milestonesEqual = (a = [], b = []) =>
+  a.length === b.length &&
+  a.every(
+    (m, i) =>
+      m.name === b[i].name &&
+      m.amount === b[i].amount &&
+      m.description === b[i].description &&
+      (m.position ?? i) === (b[i].position ?? i)
+  );
+
+const attachmentsEqual = (a = [], b = []) =>
+  a.length === b.length &&
+  a.every(
+    (m, i) =>
+      m.uri === b[i].uri && m.dataUri === b[i].dataUri && (m.label || '') === (b[i].label || '')
+  );
+
 const CreateProjectScreen = ({ navigation, route }) => {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
@@ -47,24 +107,11 @@ const CreateProjectScreen = ({ navigation, route }) => {
     )
   );
   const [verifyingLocation, setVerifyingLocation] = useState(false);
-  const [milestones, setMilestones] = useState([
-    ...(existingProject?.milestones?.length
-      ? existingProject.milestones.map((m, idx) => ({
-          name: m.name || '',
-          amount: m.amount?.toString?.() || '',
-          description: m.description || '',
-          position: idx,
-        }))
-      : [{ name: '', amount: '', description: '' }]),
-  ]);
+  const [milestones, setMilestones] = useState(() =>
+    normalizeMilestones(existingProject?.milestones)
+  );
   const [attachments, setAttachments] = useState(
-    existingProject?.media?.length
-      ? existingProject.media.map((m) => ({
-          uri: m.url || '',
-          dataUri: (m.url || '').startsWith('data:') ? m.url : '',
-          label: m.label || '',
-        }))
-      : []
+    normalizeAttachments(existingProject?.media)
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -85,7 +132,7 @@ const CreateProjectScreen = ({ navigation, route }) => {
   };
 
   const addMilestone = () => {
-    setMilestones([...milestones, { name: '', amount: '', description: '' }]);
+    setMilestones((prev) => normalizeMilestones([...prev, { name: '', amount: '', description: '' }]));
   };
 
   const removeMilestone = (index) => {
@@ -212,8 +259,13 @@ const CreateProjectScreen = ({ navigation, route }) => {
       return;
     }
 
+    const cleanedMilestones = normalizeMilestones(milestones);
+    const cleanedAttachments = normalizeAttachments(attachments);
     const budgetValue = parseFloat(formData.estimatedBudget);
-    const totalMilestones = milestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0);
+    const totalMilestones = cleanedMilestones.reduce(
+      (sum, m) => sum + (parseFloat(m.amount) || 0),
+      0
+    );
 
     if (Number.isNaN(budgetValue)) {
       Alert.alert('Invalid Budget', 'Please enter a valid budget amount');
@@ -237,18 +289,16 @@ const CreateProjectScreen = ({ navigation, route }) => {
       job_site_latitude: jobSiteLatitude,
       job_site_longitude: jobSiteLongitude,
       check_in_radius: 200,
-      milestones: milestones.map((milestone, index) => ({
+      milestones: cleanedMilestones.map((milestone, index) => ({
         name: milestone.name,
         amount: parseFloat(milestone.amount) || null,
         description: milestone.description,
         position: milestone.position ?? index,
       })),
-      media: attachments
-        .filter((a) => a.dataUri || a.uri)
-        .map((a) => ({
-          url: a.dataUri || a.uri,
-          label: a.label || '',
-        })),
+      media: cleanedAttachments.map((a) => ({
+        url: a.dataUri || a.uri,
+        label: a.label || '',
+      })),
     };
 
     try {
@@ -1107,3 +1157,24 @@ const styles = StyleSheet.create({
 });
 
 export default CreateProjectScreen;
+  useEffect(() => {
+    if (existingProject) {
+      setMilestones(normalizeMilestones(existingProject.milestones));
+      setAttachments(normalizeAttachments(existingProject.media));
+    }
+  }, [existingProject?.id, existingProject?.milestones, existingProject?.media]);
+
+  // Guard against duplicate entries introduced by navigation/route churn
+  useEffect(() => {
+    const normalized = normalizeMilestones(milestones);
+    if (!milestonesEqual(milestones, normalized)) {
+      setMilestones(normalized);
+    }
+  }, [milestones]);
+
+  useEffect(() => {
+    const normalized = normalizeAttachments(attachments);
+    if (!attachmentsEqual(attachments, normalized)) {
+      setAttachments(normalized);
+    }
+  }, [attachments]);

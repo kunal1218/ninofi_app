@@ -1,6 +1,6 @@
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Image } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Dimensions, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Image, PanResponder } from 'react-native';
 import { useSelector } from 'react-redux';
 import {
   fetchGeneratedContract,
@@ -40,6 +40,8 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
   const [tasks, setTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [fullScreenMedia, setFullScreenMedia] = useState({ open: false, index: 0, items: [] });
+  const screenWidth = Dimensions.get('window').width;
 
   if (!project) {
     return (
@@ -83,6 +85,48 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
     () => contracts.filter((c) => isFullySigned(c)),
     [contracts, isFullySigned]
   );
+  const projectMedia = useMemo(() => {
+    const media = project?.media || [];
+    return media.filter((m, idx, arr) => {
+      const key = (m.id || m.url || '').toString();
+      if (!key) return true;
+      const first = arr.findIndex((x) => (x.id || x.url || '').toString() === key);
+      return first === idx;
+    });
+  }, [project?.media]);
+
+  const fullScreenScrollRef = useRef(null);
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        Math.abs(gestureState.dy) > Math.abs(gestureState.dx) && Math.abs(gestureState.dy) > 10,
+      onPanResponderRelease: (_, gestureState) => {
+        if (Math.abs(gestureState.dy) > 50) {
+          setFullScreenMedia({ open: false, index: 0, items: [] });
+        }
+      },
+    })
+  ).current;
+
+  useEffect(() => {
+    if (fullScreenMedia.open && fullScreenScrollRef.current) {
+      fullScreenScrollRef.current.scrollTo({
+        x: fullScreenMedia.index * screenWidth,
+        animated: false,
+      });
+    }
+  }, [fullScreenMedia.open, fullScreenMedia.index, screenWidth]);
+
+  const openMediaFullScreen = useCallback((items = [], startIndex = 0) => {
+    const clean = (items || []).map((m) => (typeof m === 'string' ? m : m?.url)).filter(Boolean);
+    if (!clean.length) return;
+    const safeIndex = Math.min(Math.max(startIndex, 0), clean.length - 1);
+    setFullScreenMedia({ open: true, index: safeIndex, items: clean });
+  }, []);
+
+  const closeFullScreenMedia = useCallback(() => {
+    setFullScreenMedia({ open: false, index: 0, items: [] });
+  }, []);
 
   const loadContracts = useCallback(async () => {
     if (!project?.id) return;
@@ -469,11 +513,13 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
                   </View>
                   {t.description ? <Text style={styles.body}>{t.description}</Text> : null}
                   {t.proofImageUrl ? (
-                    <Image
-                      source={{ uri: t.proofImageUrl }}
-                      style={styles.proofImage}
-                      resizeMode="cover"
-                    />
+                    <TouchableOpacity onPress={() => openMediaFullScreen([t.proofImageUrl], 0)}>
+                      <Image
+                        source={{ uri: t.proofImageUrl }}
+                        style={styles.proofImage}
+                        resizeMode="cover"
+                      />
+                    </TouchableOpacity>
                   ) : (
                     <Text style={styles.mutedSmall}>No proof image attached.</Text>
                   )}
@@ -533,20 +579,10 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.mediaRow}
             >
-              {project.media
-                .filter((m, idx, arr) => {
-                  const key = (m.id || m.url || '').toString();
-                  if (!key) return true;
-                  const first = arr.findIndex((x) => (x.id || x.url || '').toString() === key);
-                  return first === idx;
-                })
-                .map((m, idx) => (
-                <Image
-                  key={`${m.id || 'media'}-${idx}-${m.url || 'uri'}`}
-                  source={{ uri: m.url }}
-                  style={styles.mediaThumb}
-                  resizeMode="cover"
-                />
+              {projectMedia.map((m, idx) => (
+                <TouchableOpacity key={`${m.id || 'media'}-${idx}-${m.url || 'uri'}`} onPress={() => openMediaFullScreen(projectMedia, idx)}>
+                  <Image source={{ uri: m.url }} style={styles.mediaThumb} resizeMode="cover" />
+                </TouchableOpacity>
               ))}
             </ScrollView>
           </View>
@@ -936,6 +972,42 @@ const ProjectOverviewScreen = ({ route, navigation }) => {
         </SafeAreaView>
       </Modal>
 
+      <Modal
+        visible={fullScreenMedia.open}
+        animationType="fade"
+        transparent
+        statusBarTranslucent
+        onRequestClose={closeFullScreenMedia}
+      >
+        <View style={styles.fullscreenOverlay} {...panResponder.panHandlers}>
+          <ScrollView
+            ref={fullScreenScrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) => {
+              const nextIndex = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+              setFullScreenMedia((prev) => ({ ...prev, index: nextIndex }));
+            }}
+          >
+            {fullScreenMedia.items.map((uri, idx) => (
+              <View key={`${uri}-${idx}`} style={[styles.fullscreenImageWrapper, { width: screenWidth }]}>
+                <Image source={{ uri }} style={styles.fullscreenImage} resizeMode="contain" />
+              </View>
+            ))}
+          </ScrollView>
+          <View style={styles.fullscreenTopBar}>
+            <Text style={styles.fullscreenCounter}>
+              {fullScreenMedia.index + 1} / {fullScreenMedia.items.length || 1}
+            </Text>
+            <TouchableOpacity onPress={closeFullScreenMedia} hitSlop={10}>
+              <Text style={[styles.closeText, styles.fullscreenClose]}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.fullscreenHint}>Swipe left/right to browse, swipe down to close.</Text>
+        </View>
+      </Modal>
+
       <Modal visible={Boolean(editingContract)} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -1243,6 +1315,39 @@ const styles = StyleSheet.create({
     borderColor: palette.error,
   },
   denyText: { color: palette.error, fontWeight: '700' },
+  fullscreenOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenImageWrapper: {
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenImage: {
+    width: '100%',
+    height: '100%',
+  },
+  fullscreenTopBar: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  fullscreenCounter: { color: '#fff', fontWeight: '700' },
+  fullscreenHint: {
+    position: 'absolute',
+    bottom: 26,
+    color: '#e5e7eb',
+    textAlign: 'center',
+    width: '100%',
+  },
+  fullscreenClose: { color: '#fff' },
 });
 
 export default ProjectOverviewScreen;

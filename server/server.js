@@ -7138,11 +7138,18 @@ app.get('/api/work-hours/project/:projectId/summary', async (req, res) => {
           type: 'check-in',
           action: kind,
         };
-        const contractorTarget = contractorId || ownerFallbackId;
-        // Only send the contractor notification if the target is not the worker themself.
-        if (contractorTarget && contractorTarget !== userId) {
-          await sendNotification(contractorTarget, 'Worker check-in', contractorBody, payload);
+        const targets = new Set();
+        if (contractorSet && contractorSet.size) {
+          contractorSet.forEach((id) => targets.add(id));
         }
+        if (contractorId) targets.add(contractorId);
+        if (ownerFallbackId) targets.add(ownerFallbackId);
+
+        for (const targetId of targets) {
+          if (!targetId || targetId === userId) continue;
+          await sendNotification(targetId, 'Worker check-in', contractorBody, payload);
+        }
+
         // Always notify the worker themself for confirmation
         await sendNotification(userId, 'Check-in status', workerBody, payload);
       };

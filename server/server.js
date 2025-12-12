@@ -9454,6 +9454,8 @@ const buildContractPdf = async (contractRow, signatures = []) => {
 app.get('/api/projects/:projectId/contracts/:contractId/pdf', async (req, res) => {
   try {
     const { projectId, contractId } = req.params;
+    const mode = (req.query?.mode || '').toLowerCase();
+    const wantBinary = mode === 'binary' || mode === 'pdf';
     if (!projectId || !contractId) {
       return res.status(400).json({ message: 'projectId and contractId are required' });
     }
@@ -9478,16 +9480,23 @@ app.get('/api/projects/:projectId/contracts/:contractId/pdf', async (req, res) =
     const contractRow = contractResult.rows[0];
     const sigRows = signatureResult.rows || [];
 
-    let base64;
+    let buffer;
     try {
-      const buffer = await buildContractPdf(contractRow, sigRows);
-      base64 = buffer.toString('base64');
+      buffer = await buildContractPdf(contractRow, sigRows);
     } catch (errPdf) {
       logError('contracts:get-generated-pdf:render-fallback', { contractId, projectId }, errPdf);
       const fallbackText =
         contractRow?.contract_text || contractRow?.description || 'Contract text unavailable';
-      base64 = Buffer.from(fallbackText, 'utf8').toString('base64');
+      buffer = Buffer.from(fallbackText, 'utf8');
     }
+
+    if (wantBinary) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${contractId}.pdf"`);
+      return res.send(buffer);
+    }
+
+    const base64 = buffer.toString('base64');
     return res.json({
       filename: `${contractId}.pdf`,
       base64,

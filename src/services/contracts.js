@@ -118,8 +118,11 @@ export const downloadGeneratedContractPdf = async (projectId, contractId) => {
   try {
     const res = await projectAPI.getGeneratedContractPdf(projectId, contractId, {
       responseType: 'json',
+      params: { mode: 'json' },
     });
-    const { base64, filename, message } = res.data || {};
+    const data = res?.data;
+    const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+    const { base64, filename, message } = parsed || {};
     if (!base64) {
       return { success: false, error: message || 'No PDF returned' };
     }
@@ -132,10 +135,11 @@ export const downloadGeneratedContractPdf = async (projectId, contractId) => {
   } catch (error) {
     try {
       const data = error?.response?.data;
-      if (data?.base64) {
+      const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+      if (parsed?.base64) {
         const dir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
-        const uri = `${dir}${data.filename || 'contract.pdf'}`;
-        await FileSystem.writeAsStringAsync(uri, data.base64, {
+        const uri = `${dir}${parsed.filename || 'contract.pdf'}`;
+        await FileSystem.writeAsStringAsync(uri, parsed.base64, {
           encoding: FileSystem.EncodingType.Base64,
         });
         return { success: true, uri };

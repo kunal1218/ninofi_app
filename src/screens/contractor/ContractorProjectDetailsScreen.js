@@ -143,7 +143,7 @@ const ContractorProjectDetailsScreen = ({ route, navigation }) => {
           <Text style={styles.sectionTitle}>Milestones</Text>
           {project.milestones?.length ? (
             project.milestones.map((m, idx) => (
-              <View key={m.id || idx} style={styles.milestone}>
+              <View key={`${m.id || 'milestone'}-${idx}`} style={styles.milestone}>
                 <View>
                   <Text style={styles.milestoneTitle}>{m.name}</Text>
                   <Text style={styles.milestoneMeta}>

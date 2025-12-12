@@ -136,8 +136,8 @@ export const projectAPI = {
     api.get(`/projects/${projectId}/contracts/${contractId}`),
   updateGeneratedContract: async (projectId, contractId, payload) =>
     api.put(`/projects/${projectId}/contracts/${contractId}`, payload),
-  getGeneratedContractPdf: async (projectId, contractId) =>
-    api.get(`/projects/${projectId}/contracts/${contractId}/pdf`),
+  getGeneratedContractPdf: async (projectId, contractId, config = {}) =>
+    api.get(`/projects/${projectId}/contracts/${contractId}/pdf`, config),
   listApprovedContractsForContractor: async (contractorId) =>
     api.get(`/contracts/approved/${contractorId}`),
   listApprovedContractsForUser: async (userId) => api.get(`/contracts/approved/user/${userId}`),

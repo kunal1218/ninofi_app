@@ -116,18 +116,37 @@ export const downloadGeneratedContractPdf = async (projectId, contractId) => {
     return { success: false, error: 'projectId and contractId are required' };
   }
   try {
-    const res = await projectAPI.getGeneratedContractPdf(projectId, contractId);
+    const res = await projectAPI.getGeneratedContractPdf(projectId, contractId, {
+      responseType: 'json',
+    });
     const { base64, filename, message } = res.data || {};
     if (!base64) {
       return { success: false, error: message || 'No PDF returned' };
     }
-    const uri = `${FileSystem.documentDirectory || ''}${filename || 'contract.pdf'}`;
+    const dir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
+    const uri = `${dir}${filename || 'contract.pdf'}`;
     await FileSystem.writeAsStringAsync(uri, base64, {
       encoding: FileSystem.EncodingType.Base64,
     });
     return { success: true, uri };
   } catch (error) {
-    const msg = error.response?.data?.message || 'Failed to download contract';
+    try {
+      const data = error?.response?.data;
+      if (data?.base64) {
+        const dir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
+        const uri = `${dir}${data.filename || 'contract.pdf'}`;
+        await FileSystem.writeAsStringAsync(uri, data.base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        return { success: true, uri };
+      }
+    } catch (fallbackErr) {
+      // ignore and surface original error
+    }
+    const status = error?.response?.status;
+    const msg =
+      error?.response?.data?.message ||
+      (status ? `Download failed (status ${status})` : 'Failed to download contract');
     return { success: false, error: msg };
   }
 };
